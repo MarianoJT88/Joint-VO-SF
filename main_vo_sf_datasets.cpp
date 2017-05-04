@@ -1,11 +1,25 @@
-
-//*******************************************************
-// Authors: Mariano Jaimez Tarifa & Christian Kerl
-// Organizations: MAPIR, University of Malaga
-//				  Computer Vision group, TUM
-// Dates: September 2015 - present
-// License: GNU GPL3
-//*******************************************************
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
 #include <stdio.h>
 #include <string.h>
@@ -45,16 +59,15 @@ int main()
 	if (save_results)
 		dataset.CreateResultsFile();
     dataset.openRawlog();
-	dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
+	dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
 	cf.cam_pose = dataset.gt_pose; cf.cam_oldpose = dataset.gt_pose;
     cf.createImagePyramid();
 
 
 	//Auxiliary variables
-	int pushed_key = 0;
+	int pushed_key = 0, stop = 0;
 	bool anything_new = 0;
     bool realtime = 0;
-	int stop = 0;
 	
 	while (!stop)
 	{	
@@ -71,9 +84,8 @@ int main()
 			cf.im_r_old.swap(cf.im_r);
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
-            dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
-			cf.createImagePyramid();
-            cf.mainIteration();
+            dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
+            cf.mainIteration(true);
             cf.createOptLabelImage();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
@@ -82,7 +94,7 @@ int main()
 
         //Only solve
         case 'a':
-            cf.mainIteration();
+            cf.mainIteration(false);
             cf.createOptLabelImage();
             anything_new = 1;
             break;
@@ -122,9 +134,8 @@ int main()
             cf.im_r_old.swap(cf.im_r);
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
-			dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
-			cf.createImagePyramid();
-            cf.mainIteration();
+			dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
+            cf.mainIteration(true);
             cf.createOptLabelImage();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);

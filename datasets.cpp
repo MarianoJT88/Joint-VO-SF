@@ -14,6 +14,7 @@ Datasets::Datasets(unsigned int res_factor)
     downsample = res_factor; // (1 - 640 x 480, 2 - 320 x 240)
 	max_distance = 6.f;
 	dataset_finished = false;
+	rawlog_count = 0;
 }
 
 void Datasets::openRawlog()
@@ -23,8 +24,6 @@ void Datasets::openRawlog()
 	//==================================================================
 	if (!dataset.loadFromRawLogFile(filename))
 		throw std::runtime_error("\nCouldn't open rawlog dataset file for input...");
-
-	rawlog_count = 0;
 
 	// Set external images directory:
 	const string imgsPath = CRawlog::detectImagesDirectory(filename);
@@ -39,10 +38,9 @@ void Datasets::openRawlog()
 	if (f_gt.fail())
 		throw std::runtime_error("\nError finding the groundtruth file: it should be contained in the same folder than the rawlog file");
 
-	//Count number of lines
+	//Count number of lines (of the file)
 	unsigned int number_of_lines = 0;
     std::string line;
-
     while (std::getline(f_gt, line))
         ++number_of_lines;
 
@@ -57,8 +55,7 @@ void Datasets::openRawlog()
 	f_gt.getline(aux, 100);
 	for (unsigned int k=0; k<number_of_lines-3; k++)
 	{
-		f_gt >> gt_matrix(k,0);
-		f_gt >> gt_matrix(k,1); f_gt >> gt_matrix(k,2); f_gt >> gt_matrix(k,3);
+		f_gt >> gt_matrix(k,0); f_gt >> gt_matrix(k,1); f_gt >> gt_matrix(k,2); f_gt >> gt_matrix(k,3);
 		f_gt >> gt_matrix(k,4); f_gt >> gt_matrix(k,5); f_gt >> gt_matrix(k,6); f_gt >> gt_matrix(k,7);
 		f_gt.ignore(10,'\n');	
 	}
@@ -67,11 +64,11 @@ void Datasets::openRawlog()
 	last_gt_row = 0;
 }
 
-void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g,Eigen::MatrixXf &im_b)
+void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g, Eigen::MatrixXf &im_b)
 {
 	if (dataset_finished)
 	{
-		printf("\n End of the dataset reached. Stop estimating stuff!");
+		printf("\n End of the dataset reached. Stop estimating motion!");
 		return;
 	}
 	
@@ -137,13 +134,14 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 		}
 	}
 
+	//Get the pose of the closest ground truth
 	double x,y,z,qx,qy,qz,w;
 	x = gt_matrix(last_gt_row,1); y = gt_matrix(last_gt_row,2); z = gt_matrix(last_gt_row,3);
 	qx = gt_matrix(last_gt_row,4); qy = gt_matrix(last_gt_row,5); qz = gt_matrix(last_gt_row,6);
 	w = gt_matrix(last_gt_row,7);
 
 	CMatrixDouble33 mat;
-	mat(0,0) = 1- 2*qy*qy - 2*qz*qz;
+	mat(0,0) = 1 - 2*qy*qy - 2*qz*qz;
 	mat(0,1) = 2*(qx*qy - w*qz);
 	mat(0,2) = 2*(qx*qz + w*qy);
 	mat(1,0) = 2*(qx*qy + w*qz);
@@ -156,7 +154,7 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 	poses::CPose3D gt, transf;
 	gt.setFromValues(x,y,z,0,0,0);
 	gt.setRotationMatrix(mat);
-	transf.setFromValues(0,0,0,0.5*M_PI, -0.5*M_PI, 0);
+	transf.setFromValues(0,0,0,0.5*M_PI, -0.5*M_PI, 0); //Needed because we use different coordinates
 
 	gt_oldpose = gt_pose;
 	gt_pose = gt + transf;
@@ -165,7 +163,7 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 
 void Datasets::CreateResultsFile()
 {
-	// Open file, find the first free file-name.
+	//Create file with the first free file-name.
 	char	aux[100];
 	int     nFile = 0;
 	bool    free_name = false;
@@ -198,14 +196,8 @@ void Datasets::writeTrajectoryFile(poses::CPose3D &cam_pose, MatrixXf &ddt)
 	
 		char aux[24];
 		sprintf(aux,"%.04f", timestamp_obs);
-		f_res << aux << " ";
-		f_res << cam_pose[0] << " ";
-		f_res << cam_pose[1] << " ";
-		f_res << cam_pose[2] << " ";
-		f_res << quat(2) << " ";
-		f_res << quat(3) << " ";
-		f_res << -quat(1) << " ";
-		f_res << -quat(0) << endl;
+		f_res << aux << " " << cam_pose[0] << " " << cam_pose[1] << " " << cam_pose[2] << " ";
+		f_res << quat(2) << " " << quat(3) << " " << -quat(1) << " " << -quat(0) << endl;
 	}
 }
 

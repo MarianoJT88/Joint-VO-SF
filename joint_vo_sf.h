@@ -2,10 +2,10 @@
 **Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
 **------------------------------------------------------------------------------**
 **																				**
-**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga				**
-**	Copyright(c) 2017, Christian Kerl, Technical University of Munich			**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
 **	Copyright(c) 2017, MAPIR group, University of Malaga						**
-**	Copyright(c) 2017, Computer Vision group, Tech. University of Munich		**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
 **																				**
 **  This program is free software: you can redistribute it and/or modify		**
 **  it under the terms of the GNU General Public License (version 3) as			**
@@ -17,7 +17,7 @@
 **  GNU General Public License for more details.								**
 **																				**
 **  You should have received a copy of the GNU General Public License			**
-**  along with this program.  If not, see <http://www.gnu.org/licenses/>.		**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
 **																				**
 *********************************************************************************/
 
@@ -69,12 +69,12 @@ public:
 
 	//						General
 	//----------------------------------------------------------------
-    std::vector<Eigen::MatrixXf> color, color_old, color_inter, color_warped;
+    std::vector<Eigen::MatrixXf> intensity, intensity_old, intensity_inter, intensity_warped;
     std::vector<Eigen::MatrixXf> depth, depth_old, depth_inter, depth_warped;
 	std::vector<Eigen::MatrixXf> xx, xx_inter, xx_old, xx_warped;
 	std::vector<Eigen::MatrixXf> yy, yy_inter, yy_old, yy_warped;
 
-	Eigen::MatrixXf depth_wf, color_wf;
+	Eigen::MatrixXf depth_wf, intensity_wf;
     Eigen::MatrixXf dcu, dcv, dct;
     Eigen::MatrixXf ddu, ddv, ddt;
 	Eigen::MatrixXf im_r, im_g, im_b;
@@ -113,8 +113,8 @@ public:
 	void calculateDerivatives();
     void computeWeights();
 
-    void mainIteration();
-    void computeSceneFlowFromMotionFast();
+    void mainIteration(bool create_image_pyr);
+    void computeSceneFlowFromRigidMotions();
 	void interpolateColorAndDepthAcu(float &c, float &d, const float ind_u, const float ind_v);
 	void updateVelocitiesAndTransformations(Eigen::Matrix<float,6,1> &last_sol, unsigned int label);
 	void getCameraPoseFromBackgroundEstimate();
@@ -147,8 +147,6 @@ public:
 	void updateSceneDatasetVideo(const mrpt::poses::CPose3D &gt, const mrpt::poses::CPose3D &gt_old);
 	void updateSceneSequencesVideo();
 
-    mrpt::utils::CTicTac	clock;
-	float	time_im_pyr;
 
 
     //Input / Output

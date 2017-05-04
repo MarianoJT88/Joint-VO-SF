@@ -32,7 +32,7 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
 
 	//Resize matrices which are not in a "pyramid"
 	depth_wf.setSize(height,width);
-	color_wf.setSize(height,width);
+	intensity_wf.setSize(height,width);
     motionfield[0].setSize(rows,cols);
     motionfield[1].setSize(rows,cols);
     motionfield[2].setSize(rows,cols);
@@ -48,11 +48,11 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
 
 	//Resize matrices in a "pyramid"
     const unsigned int pyr_levels = round(log2(width/cols)) + ctf_levels;
-    color.resize(pyr_levels); color_old.resize(pyr_levels); color_inter.resize(pyr_levels);
+    intensity.resize(pyr_levels); intensity_old.resize(pyr_levels); intensity_inter.resize(pyr_levels);
     depth.resize(pyr_levels); depth_old.resize(pyr_levels); depth_inter.resize(pyr_levels);
     xx.resize(pyr_levels); xx_inter.resize(pyr_levels); xx_old.resize(pyr_levels);
     yy.resize(pyr_levels); yy_inter.resize(pyr_levels); yy_old.resize(pyr_levels);
-    color_warped.resize(pyr_levels);
+    intensity_warped.resize(pyr_levels);
     depth_warped.resize(pyr_levels);
     xx_warped.resize(pyr_levels);
     yy_warped.resize(pyr_levels);
@@ -62,7 +62,7 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
     {
         const unsigned int s = pow(2.f,int(i));
         cols_i = width/s; rows_i = height/s;
-        color[i].resize(rows_i, cols_i); color_old[i].resize(rows_i, cols_i); color_inter[i].resize(rows_i, cols_i);
+        intensity[i].resize(rows_i, cols_i); intensity_old[i].resize(rows_i, cols_i); intensity_inter[i].resize(rows_i, cols_i);
         depth[i].resize(rows_i, cols_i); depth_inter[i].resize(rows_i, cols_i); depth_old[i].resize(rows_i, cols_i);
         depth[i].assign(0.f); depth_old[i].assign(0.f);
         xx[i].resize(rows_i, cols_i); xx_inter[i].resize(rows_i, cols_i); xx_old[i].resize(rows_i, cols_i);
@@ -72,7 +72,7 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
 
 		if (cols_i <= cols)
 		{
-            color_warped[i].resize(rows_i,cols_i);
+            intensity_warped[i].resize(rows_i,cols_i);
             depth_warped[i].resize(rows_i,cols_i);
             xx_warped[i].resize(rows_i,cols_i);
             yy_warped[i].resize(rows_i,cols_i);
@@ -133,7 +133,7 @@ void VO_SF::loadImagePairFromFiles(string files_dir, bool is_Quiroga, unsigned i
     cv::Mat intensity = cv::imread(name.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
-            color_wf(height-1-v,u) = norm_factor*intensity.at<unsigned char>(res_factor*v+1,res_factor*u);
+            intensity_wf(height-1-v,u) = norm_factor*intensity.at<unsigned char>(res_factor*v+1,res_factor*u);
 
     sprintf(aux, "depth0.png");
     name = files_dir + aux;
@@ -161,7 +161,7 @@ void VO_SF::loadImagePairFromFiles(string files_dir, bool is_Quiroga, unsigned i
     intensity = cv::imread(name.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
-            color_wf(height-1-v,u) = norm_factor*intensity.at<unsigned char>(res_factor*v+1,res_factor*u);
+            intensity_wf(height-1-v,u) = norm_factor*intensity.at<unsigned char>(res_factor*v+1,res_factor*u);
 
     sprintf(aux, "depth1.png");
     name = files_dir + aux;
@@ -188,11 +188,6 @@ void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned
     sprintf(aux, "i%d.png", index);
     string name = files_dir + aux;
 
-    //cv::Mat intensity = cv::imread(name.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
-    //for (unsigned int v=0; v<height; v++)
-    //    for (unsigned int u=0; u<width; u++)
-    //        color_wf(height-1-v,u) = norm_factor*intensity.at<unsigned char>(res_factor*v,res_factor*u);
-
 	cv::Mat color = cv::imread(name.c_str(), CV_LOAD_IMAGE_COLOR);
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
@@ -201,7 +196,7 @@ void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned
 			im_r(height-1-v,u) = norm_factor*color_here[2];
 			im_g(height-1-v,u) = norm_factor*color_here[1];
 			im_b(height-1-v,u) = norm_factor*color_here[0];
-			color_wf(height-1-v,u) = 0.299f*im_r(height-1-v,u) + 0.587f*im_g(height-1-v,u) + 0.114f*im_b(height-1-v,u);
+			intensity_wf(height-1-v,u) = 0.299f*im_r(height-1-v,u) + 0.587f*im_g(height-1-v,u) + 0.114f*im_b(height-1-v,u);
 		}
 
     sprintf(aux, "d%d.png", index);
@@ -214,9 +209,6 @@ void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
             depth_wf(height-1-v,u) = depth_float.at<float>(res_factor*v,res_factor*u);
-
-
-	createImagePyramid();
 }
 
 void VO_SF::saveFlowAndSegmToFile(string files_dir)
@@ -280,14 +272,12 @@ void VO_SF::saveSegmentationImage()
 
 
 void VO_SF::createImagePyramid()
-{
-    clock.Tic();
-	
+{	
 	//Threshold to use (or not) neighbours in the filter
 	const float max_depth_dif = 0.1f;
 
     //Push the frames back
-    color_old.swap(color);
+    intensity_old.swap(intensity);
     depth_old.swap(depth);
     xx_old.swap(xx);
     yy_old.swap(yy);
@@ -304,14 +294,14 @@ void VO_SF::createImagePyramid()
         rows_i = height/s;
         const unsigned int i_1 = i-1;
 		MatrixXf &depth_here = depth[i];
-		MatrixXf &color_here = color[i];
+		MatrixXf &intensity_here = intensity[i];
 		MatrixXf &xx_here = xx[i];
 		MatrixXf &yy_here = yy[i];
 
         if (i == 0)
         {
             depth_here.swap(depth_wf);
-            color_here.swap(color_wf);
+            intensity_here.swap(intensity_wf);
         }
 
         //                              Downsampling
@@ -319,7 +309,7 @@ void VO_SF::createImagePyramid()
         else
         {
             const MatrixXf &depth_prev = depth[i_1];
-			const MatrixXf &color_prev = color[i_1];
+			const MatrixXf &intensity_prev = intensity[i_1];
 			
 			for (unsigned int u = 0; u < cols_i; u++)
                 for (unsigned int v = 0; v < rows_i; v++)
@@ -331,22 +321,13 @@ void VO_SF::createImagePyramid()
                     if ((v>0)&&(v<rows_i-1)&&(u>0)&&(u<cols_i-1))
                     {
                         const Matrix4f depth_block = depth_prev.block<4,4>(v2-1,u2-1);
-                        const Matrix4f color_block = color_prev.block<4,4>(v2-1,u2-1);
+                        const Matrix4f intensity_block = intensity_prev.block<4,4>(v2-1,u2-1);
                         float depths[4] = {depth_block(5), depth_block(6), depth_block(9), depth_block(10)};
 
-                        //Sort the array (try to find a good/representative value)
-                        //for (signed char k=2; k>=0; k--)
-                        //    if (depths[k+1] < depths[k])
-                        //        std::swap(depths[k+1], depths[k]);
-                        //for (unsigned char k=1; k<3; k++)
-                        //    if (depths[k] > depths[k+1])
-                        //        std::swap(depths[k+1], depths[k]);
-                        //const float dcenter = (depths[2] < depths[1]) ? depths[1] : depths[2];
-
+                        //Find the "second maximum" value of the central block
 						if (depths[1] < depths[0]) {std::swap(depths[1], depths[0]);}
 						if (depths[3] < depths[2]) {std::swap(depths[3], depths[2]);}
 						const float dcenter = (depths[3] < depths[1]) ? max(depths[3], depths[0]) : max(depths[1], depths[2]);
-
 
                         if (dcenter != 0.f)
                         {
@@ -362,20 +343,20 @@ void VO_SF::createImagePyramid()
                                     const float aux_w = f_mask(k)*(max_depth_dif - abs_dif);
                                     weight += aux_w;
                                     sum_d += aux_w*depth_block(k);
-                                    sum_c += aux_w*color_block(k);
+                                    sum_c += aux_w*intensity_block(k);
                                 }
                             }
                             depth_here(v,u) = sum_d/weight;
-                            color_here(v,u) = sum_c/weight;
+                            intensity_here(v,u) = sum_c/weight;
                         }
                         else
                         {
                             float sum_c = 0.f;
                             for (unsigned char k=0; k<16; k++)
-                                sum_c += f_mask(k)*color_block(k);
+                                sum_c += f_mask(k)*intensity_block(k);
 
                             depth_here(v,u) = 0.f;
-                            color_here(v,u) = sum_c;
+                            intensity_here(v,u) = sum_c;
                         }
                     }
 
@@ -383,9 +364,9 @@ void VO_SF::createImagePyramid()
                     else
                     {
                         const Matrix2f depth_block = depth_prev.block<2,2>(v2,u2);
-                        const Matrix2f color_block = color_prev.block<2,2>(v2,u2);
+                        const Matrix2f intensity_block = intensity_prev.block<2,2>(v2,u2);
 
-						color_here(v,u) = 0.25f*color_block.sumAll();
+						intensity_here(v,u) = 0.25f*intensity_block.sumAll();
 
 						float new_d = 0.f;
 						unsigned int cont = 0;
@@ -420,8 +401,6 @@ void VO_SF::createImagePyramid()
                     yy_here(v,u) = 0.f;
                 }
     }
-
-	time_im_pyr = clock.Tac();
 }
 
 void VO_SF::calculateCoord()
@@ -440,7 +419,7 @@ void VO_SF::calculateCoord(cv::Rect region)
 	const MatrixXf &depth_warped_ref = depth_warped[image_level];
 
 	MatrixXf &depth_inter_ref = depth_inter[image_level];
-	MatrixXf &color_inter_ref = color_inter[image_level];
+	MatrixXf &intensity_inter_ref = intensity_inter[image_level];
 	MatrixXf &xx_inter_ref = xx_inter[image_level];
 	MatrixXf &yy_inter_ref = yy_inter[image_level];
 
@@ -461,7 +440,7 @@ void VO_SF::calculateCoord(cv::Rect region)
                 yy_inter_ref(v,u) = 0.f;
 			}
 
-            color_inter_ref(v,u) = 0.5f*(color_old[image_level](v,u) + color_warped[image_level](v,u));
+            intensity_inter_ref(v,u) = 0.5f*(intensity_old[image_level](v,u) + intensity_warped[image_level](v,u));
 		}
 }
 
@@ -471,15 +450,15 @@ void VO_SF::calculateDerivatives()
 	MatrixXf rx(rows_i,cols_i), ry(rows_i,cols_i);
     rx.fill(1.f); ry.fill(1.f);
 
-	MatrixXf rx_color(rows_i,cols_i), ry_color(rows_i, cols_i);
-    rx_color.fill(1.f); ry_color.fill(1.f);
+	MatrixXf rx_intensity(rows_i,cols_i), ry_intensity(rows_i, cols_i);
+    rx_intensity.fill(1.f); ry_intensity.fill(1.f);
 
 	const MatrixXf &depth_ref = depth_inter[image_level];
-	const MatrixXf &color_ref = color_inter[image_level];
+	const MatrixXf &intensity_ref = intensity_inter[image_level];
 	const MatrixXf &xx_ref = xx_inter[image_level];
 	const MatrixXf &yy_ref = yy_inter[image_level];
 
-    const float epsilon_color = 1e-6f;
+    const float epsilon_intensity = 1e-6f;
 	const float epsilon_depth = 0.005f;
 
     for (unsigned int u = 0; u < cols_i-1; u++)
@@ -488,7 +467,7 @@ void VO_SF::calculateDerivatives()
             {
                 //rx(v,u) = sqrtf(square(xx_ref(v,u+1) - xx_ref(v,u)) + square(depth_ref(v,u+1) - depth_ref(v,u)));
 				rx(v,u) = abs(depth_ref(v,u+1) - depth_ref(v,u)) + epsilon_depth;
-				rx_color(v,u) = abs(color_ref(v,u+1) - color_ref(v,u)) + epsilon_color;
+				rx_intensity(v,u) = abs(intensity_ref(v,u+1) - intensity_ref(v,u)) + epsilon_intensity;
             }
 
     for (unsigned int u = 0; u < cols_i; u++)
@@ -497,14 +476,14 @@ void VO_SF::calculateDerivatives()
             {
                 //ry(v,u) = sqrtf(square(yy_ref(v+1,u) - yy_ref(v,u)) + square(depth_ref(v+1,u) - depth_ref(v,u)));
 				ry(v,u) = abs(depth_ref(v+1,u) - depth_ref(v,u)) + epsilon_depth;
-				ry_color(v,u) = abs(color_ref(v+1,u) - color_ref(v,u)) + epsilon_color;
+				ry_intensity(v,u) = abs(intensity_ref(v+1,u) - intensity_ref(v,u)) + epsilon_intensity;
             }
 
 	//Alternative using block operations (same speed in my test with few null pixels)
 	//rx.block(0,0, rows_i, cols_i-1) = (depth_ref.block(0,1,rows_i,cols_i-1) - depth_ref.block(0,0,rows_i,cols_i-1)).array().abs() + epsilon_depth;
 	//ry.block(0,0, rows_i-1, cols_i) = (depth_ref.block(1,0,rows_i-1,cols_i) - depth_ref.block(0,0,rows_i-1,cols_i)).array().abs() + epsilon_depth;
-	//rx_color.block(0,0, rows_i, cols_i-1) = (color_ref.block(0,1,rows_i,cols_i-1) - color_ref.block(0,0,rows_i,cols_i-1)).array().abs() + epsilon_color;
-	//ry_color.block(0,0, rows_i-1, cols_i) = (color_ref.block(1,0,rows_i-1,cols_i) - color_ref.block(0,0,rows_i-1,cols_i)).array().abs() + epsilon_color;
+	//rx_intensity.block(0,0, rows_i, cols_i-1) = (intensity_ref.block(0,1,rows_i,cols_i-1) - intensity_ref.block(0,0,rows_i,cols_i-1)).array().abs() + epsilon_intensity;
+	//ry_intensity.block(0,0, rows_i-1, cols_i) = (intensity_ref.block(1,0,rows_i-1,cols_i) - intensity_ref.block(0,0,rows_i-1,cols_i)).array().abs() + epsilon_intensity;
 
 
     //Spatial derivatives
@@ -512,7 +491,7 @@ void VO_SF::calculateDerivatives()
         for (unsigned int u = 1; u < cols_i-1; u++)
             if (Null(v,u) == false)
             {
-                dcu(v,u) = (rx_color(v,u-1)*(color_ref(v,u+1)-color_ref(v,u)) + rx_color(v,u)*(color_ref(v,u) - color_ref(v,u-1)))/(rx_color(v,u)+rx_color(v,u-1));
+                dcu(v,u) = (rx_intensity(v,u-1)*(intensity_ref(v,u+1)-intensity_ref(v,u)) + rx_intensity(v,u)*(intensity_ref(v,u) - intensity_ref(v,u-1)))/(rx_intensity(v,u)+rx_intensity(v,u-1));
                 ddu(v,u) = (rx(v,u-1)*(depth_ref(v,u+1)-depth_ref(v,u)) + rx(v,u)*(depth_ref(v,u) - depth_ref(v,u-1)))/(rx(v,u)+rx(v,u-1));
             }
 
@@ -525,7 +504,7 @@ void VO_SF::calculateDerivatives()
         for (unsigned int v = 1; v < rows_i-1; v++)
             if (Null(v,u) == false)
             {
-                dcv(v,u) = (ry_color(v-1,u)*(color_ref(v+1,u)-color_ref(v,u)) + ry_color(v,u)*(color_ref(v,u) - color_ref(v-1,u)))/(ry_color(v,u)+ry_color(v-1,u));
+                dcv(v,u) = (ry_intensity(v-1,u)*(intensity_ref(v+1,u)-intensity_ref(v,u)) + ry_intensity(v,u)*(intensity_ref(v,u) - intensity_ref(v-1,u)))/(ry_intensity(v,u)+ry_intensity(v-1,u));
                 ddv(v,u) = (ry(v-1,u)*(depth_ref(v+1,u)-depth_ref(v,u)) + ry(v,u)*(depth_ref(v,u) - depth_ref(v-1,u)))/(ry(v,u)+ry(v-1,u));
             }
 
@@ -535,15 +514,8 @@ void VO_SF::calculateDerivatives()
     ddv.row(rows_i-1) = ddv.row(rows_i-2);
 
 	//Temporal derivative
-	dct = color_warped[image_level] - color_old[image_level];
+	dct = intensity_warped[image_level] - intensity_old[image_level];
     ddt = depth_warped[image_level] - depth_old[image_level];
- //   for (unsigned int u = 0; u < cols_i; u++)
-	//	for (unsigned int v = 0; v < rows_i; v++)
- //           if (Null(v,u) == false)
- //           {
- //               dct(v,u) = color_warped[image_level](v,u) - color_old[image_level](v,u);
- //               ddt(v,u) = depth_warped[image_level](v,u) - depth_old[image_level](v,u);
- //           }
 }
 
 void VO_SF::computeWeights()
@@ -879,7 +851,7 @@ void VO_SF::warpImages(cv::Rect region)
 
 	//Refs
 	MatrixXf &depth_warped_ref = depth_warped[image_level];
-	MatrixXf &color_warped_ref = color_warped[image_level];
+	MatrixXf &intensity_warped_ref = intensity_warped[image_level];
 	MatrixXf &xx_warped_ref = xx_warped[image_level];
 	MatrixXf &yy_warped_ref = yy_warped[image_level];
 	const MatrixXf &depth_old_ref = depth_old[image_level];
@@ -891,7 +863,7 @@ void VO_SF::warpImages(cv::Rect region)
 	depth_warped_ref.block(y, x, h, w).assign(0.f);
     xx_warped_ref.block(y, x, h, w).assign(0.f);
     yy_warped_ref.block(y, x, h, w).assign(0.f);
-    color_warped_ref.block(y, x, h, w).assign(0.f);
+    intensity_warped_ref.block(y, x, h, w).assign(0.f);
 
     //Compute the rigid transformation associated to the labels
     Matrix4f mytrans[NUM_LABELS];
@@ -920,7 +892,7 @@ void VO_SF::warpImages(cv::Rect region)
                 //Calculate warping
                 const float uwarp = f*x_w/depth_w + disp_u_i;
                 const float vwarp = f*y_w/depth_w + disp_v_i;
-                interpolateColorAndDepthAcu(color_warped_ref(i,j), depth_warped_ref(i,j), uwarp, vwarp);
+                interpolateColorAndDepthAcu(intensity_warped_ref(i,j), depth_warped_ref(i,j), uwarp, vwarp);
                 if (depth_warped_ref(i,j) != 0.f)
                     depth_warped_ref(i,j) -= (depth_w-z);
 
@@ -939,15 +911,15 @@ void VO_SF::warpImagesOld()
 
 	//Refs
 	MatrixXf &depth_warped_ref = depth_warped[image_level];
-	MatrixXf &color_warped_ref = color_warped[image_level];
+	MatrixXf &intensity_warped_ref = intensity_warped[image_level];
 	MatrixXf &xx_warped_ref = xx_warped[image_level];
 	MatrixXf &yy_warped_ref = yy_warped[image_level];
 	const MatrixXf &depth_ref = depth[image_level];
-	const MatrixXf &color_ref = color[image_level];
+	const MatrixXf &intensity_ref = intensity[image_level];
 	const MatrixXf &xx_ref = xx[image_level];
 	const MatrixXf &yy_ref = yy[image_level];
 	depth_warped_ref.assign(0.f);
-	color_warped_ref.assign(0.f);
+	intensity_warped_ref.assign(0.f);
 
 	//Rigid transformation and weights
 	Matrix4f acu_trans = T_odometry; 
@@ -967,7 +939,7 @@ void VO_SF::warpImagesOld()
 			if (z != 0.f)
 			{
 				//Transform point to the warped reference frame
-				const float color_w = color_ref(i,j);
+				const float intensity_w = intensity_ref(i,j);
 				const float depth_w = acu_trans(0,0)*z + acu_trans(0,1)*xx_ref(i,j) + acu_trans(0,2)*yy_ref(i,j) + acu_trans(0,3);
 				const float x_w = acu_trans(1,0)*z + acu_trans(1,1)*xx_ref(i,j) + acu_trans(1,2)*yy_ref(i,j) + acu_trans(1,3);
 				const float y_w = acu_trans(2,0)*z + acu_trans(2,1)*xx_ref(i,j) + acu_trans(2,2)*yy_ref(i,j) + acu_trans(2,3);
@@ -992,29 +964,29 @@ void VO_SF::warpImagesOld()
 					if (abs(round(uwarp) - uwarp) + abs(round(vwarp) - vwarp) < 0.05f)
 					{
 						depth_warped_ref(round(vwarp), round(uwarp)) += depth_w;
-						color_warped_ref(round(vwarp), round(uwarp)) += color_w;
+						intensity_warped_ref(round(vwarp), round(uwarp)) += intensity_w;
 						wacu(round(vwarp), round(uwarp)) += 1.f;
 					}
 					else
 					{
 						const float w_ur = square(delta_l) + square(delta_d);
 						depth_warped_ref(vwarp_u,uwarp_r) += w_ur*depth_w;
-						color_warped_ref(vwarp_u,uwarp_r) += w_ur*color_w;
+						intensity_warped_ref(vwarp_u,uwarp_r) += w_ur*intensity_w;
 						wacu(vwarp_u,uwarp_r) += w_ur;
 
 						const float w_ul = square(delta_r) + square(delta_d);
 						depth_warped_ref(vwarp_u,uwarp_l) += w_ul*depth_w;
-						color_warped_ref(vwarp_u,uwarp_l) += w_ul*color_w;
+						intensity_warped_ref(vwarp_u,uwarp_l) += w_ul*intensity_w;
 						wacu(vwarp_u,uwarp_l) += w_ul;
 
 						const float w_dr = square(delta_l) + square(delta_u);
 						depth_warped_ref(vwarp_d,uwarp_r) += w_dr*depth_w;
-						color_warped_ref(vwarp_d,uwarp_r) += w_dr*color_w;
+						intensity_warped_ref(vwarp_d,uwarp_r) += w_dr*intensity_w;
 						wacu(vwarp_d,uwarp_r) += w_dr;
 
 						const float w_dl = square(delta_r) + square(delta_u);
 						depth_warped_ref(vwarp_d,uwarp_l) += w_dl*depth_w;
-						color_warped_ref(vwarp_d,uwarp_l) += w_dl*color_w;
+						intensity_warped_ref(vwarp_d,uwarp_l) += w_dl*intensity_w;
 						wacu(vwarp_d,uwarp_l) += w_dl;
 					}
 				}
@@ -1028,7 +1000,7 @@ void VO_SF::warpImagesOld()
 		{	
 			if (wacu(v,u) != 0.f)
 			{
-				color_warped_ref(v,u) /= wacu(v,u);
+				intensity_warped_ref(v,u) /= wacu(v,u);
 				depth_warped_ref(v,u) /= wacu(v,u);
 				xx_warped_ref(v,u) = (u - disp_u_i)*depth_warped_ref(v,u)*inv_f_i;
 				yy_warped_ref(v,u) = (v - disp_v_i)*depth_warped_ref(v,u)*inv_f_i;
@@ -1042,24 +1014,22 @@ void VO_SF::warpImagesOld()
 }
 
 
-void VO_SF::mainIteration()
+void VO_SF::mainIteration(bool create_image_pyr)
 {
-	//==================================================================================
-    //                              KMeans scene flow
-	//==================================================================================
+	CTicTac clock; clock.Tic();
+	
+	//          Create the image pyramid if it has not been computed yet
+    //----------------------------------------------------------------------------------
+	if (create_image_pyr) 
+		createImagePyramid();
 
     //                                Create labels
     //----------------------------------------------------------------------------------
-    CTicTac clock;
-    clock.Tic();
-
-    kMeans3DCoordLowRes();
-    const float time_kmeans = clock.Tac();
+    //Kmeans
+	kMeans3DCoordLowRes();
 
 	//Create the pyramid for the labels
-    clock.Tic();
 	createLabelsPyramidUsingKMeans();
-    const float time_labpyramid = clock.Tac();
 
 	//Compute warped bf_segmentation (necessary for the robust estimation)
 	computeBackgTemporalRegValues();
@@ -1067,11 +1037,7 @@ void VO_SF::mainIteration()
 
     //Solve a robust odometry problem to segment the background (coarse-to-fine)
     //---------------------------------------------------------------------------------
-    clock.Tic();
-    CTicTac auxclock;
-    float t_warping = 0.f, t_coord = 0.f, t_grad = 0.f, t_weights = 0.f, t_solver = 0.f, t_compflow = 0.f;
-
-    //Set the overall transformations to 0
+    //Initialize the overall transformations to 0
 	T_odometry.setIdentity();
     for (unsigned int l=0; l<NUM_LABELS; l++)
     {
@@ -1089,46 +1055,36 @@ void VO_SF::mainIteration()
 			cols_i = cols/s; rows_i = rows/s;
 			image_level = ctf_levels - i + round(log2(width/cols)) - 1;
 
-			auxclock.Tic();
 
 			//1. Perform warping
 			if (i == 0)
 			{
 				depth_warped[image_level] = depth[image_level];
-				color_warped[image_level] = color[image_level];
+				intensity_warped[image_level] = intensity[image_level];
 				xx_warped[image_level] = xx[image_level];
 				yy_warped[image_level] = yy[image_level];
 			}
 			else 
-                warpImagesOld(); // forward warping
+                warpImagesOld(); // forward warping, more precise
                 //warpImagesParallel(); // inverse warping
 
-			t_warping += auxclock.Tac();
 
-			//2. Compute inter coords
-			auxclock.Tic();
+			//2. Compute inter coords (better linearization of the range and optical flow constraints)
 			computeCoordsParallel();
-			t_coord += auxclock.Tac();
 
 			//4. Compute derivatives
-			auxclock.Tic();
 			calculateDerivatives();
-			t_grad += auxclock.Tac();
 
 			//6. Solve odometry
-			auxclock.Tic();
 			solveRobustOdometryCauchy();
-			t_solver += auxclock.Tac();
 
 			//Convergence of nonlinear iterations
 			if (kai_loc_level_odometry.norm() < 0.04f)
 				break;
 		}
 
-	//Find the background
-	auxclock.Tic();
+	//Segment static and dynamic parts
 	segmentBackgroundForeground();
-	float t_segm = auxclock.Tac();
 
 
 	//Solve the multi-odometry problem (coarse-to-fine)
@@ -1149,7 +1105,6 @@ void VO_SF::mainIteration()
         cols_i = cols/s; rows_i = rows/s;
         image_level = ctf_levels - i + round(log2(width/cols)) - 1;
 
-		auxclock.Tic();
 
 		//1. Perform warping
 		//Info: The accuracy of the odometry is slightly better using the other warping but I cannot use in general because
@@ -1157,72 +1112,44 @@ void VO_SF::mainIteration()
 		if (i == 0)
 		{
 			depth_warped[image_level] = depth[image_level];
-			color_warped[image_level] = color[image_level];
+			intensity_warped[image_level] = intensity[image_level];
 			xx_warped[image_level] = xx[image_level];
 			yy_warped[image_level] = yy[image_level];
 		}
 		else
 			warpImagesParallel();
-			//warpImagesOld();
-
-		t_warping += auxclock.Tac();
 
 		//2. Compute inter coords
-		auxclock.Tic();
 		computeCoordsParallel();
-		t_coord += auxclock.Tac();
 
 		//4. Compute derivatives
-		auxclock.Tic();
 		calculateDerivatives();
-		t_grad += auxclock.Tac();
 
 		//5. Compute weights
-		auxclock.Tic();
 		computeWeights();
-		t_weights += auxclock.Tac();
 
 		//6. Solve odometry
-		auxclock.Tic();
 		solveMotionForegroundAndBackground();
-		t_solver += auxclock.Tac();
     }
 
 	//Get Pose (Odometry) from the background motion estimate
 	getCameraPoseFromBackgroundEstimate();
 
-	//Warp the background-foreground segmentation to use it in the next iteration
-	auxclock.Tic();
+	// Refine static/dynamic segmentation and warp it to use it in the next iteration
 	segmentBackgroundForeground();
-	t_segm += auxclock.Tac();
-
-	auxclock.Tic();
 	warpBackgForegSegmentation();
-	const float t_warpseg = auxclock.Tac();
 	//countMovingAndUncertainPixels();
 
-
     //Compute the scene flow from the rigid motions and the labels
-    auxclock.Tic();
-	computeSceneFlowFromMotionFast();
-	t_compflow = auxclock.Tac();
+	computeSceneFlowFromRigidMotions();
 
-
-
-	//------------------------------------------------------------------------------------------------------------------------------------------------------------
-	//Time info
-	 const float time_flow = clock.Tac();
-
-	printf("\n \nOverall runtime = %f ms,   number of labels = %d", 1000.f*(time_im_pyr + time_kmeans + time_labpyramid + time_flow), NUM_LABELS);
-    printf("\n Runtimes: imagPyramid = %.1f, K-Means = %.1f, labPyramid = %.1f, Motion estim. = %.1f",
-						 1000.f*time_im_pyr, 1000.f*time_kmeans, 1000.f*time_labpyramid, 1000.f*time_flow);
-    printf("\n Runtimes(flow est.): warping = %.1f, coords = %.1f, grads = %.1f, weights = %.1f \n solver = %.1f, compflow = %.1f, segment_backg = %.1f, warp_seg = %.1f",
-				1000.f*t_warping, 1000.f*t_coord, 1000.f*t_grad, 1000.f*t_weights, 1000.f*t_solver, 1000.f*t_compflow, 1000.f*t_segm, 1000.f*t_warpseg);
-    fflush(stdout);
-	//------------------------------------------------------------------------------------------------------------------------------------------------------------
+	const float runtime = 1000.f*clock.Tac();
+	printf("\n Runtime = %f (ms) ", runtime);
+	if (create_image_pyr)	printf("including the image pyramid");
+	else					printf("without including the image pyramid");
 }
 
-void VO_SF::computeSceneFlowFromMotionFast()
+void VO_SF::computeSceneFlowFromRigidMotions()
 {
     const unsigned int repr_level = round(log2(width/cols));
 
@@ -1283,7 +1210,7 @@ void VO_SF::interpolateColorAndDepthAcu(float &c, float &d, const float ind_u, c
     const float inf_v = floor(ind_v);
     const float sup_v = inf_v + 1.f;
 
-    const Matrix2f cmat = color[image_level].block<2,2>(inf_v,inf_u);
+    const Matrix2f cmat = intensity[image_level].block<2,2>(inf_v,inf_u);
     const Matrix2f dmat = depth[image_level].block<2,2>(inf_v,inf_u);
 
 

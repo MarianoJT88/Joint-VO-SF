@@ -11,6 +11,7 @@
 #include <string.h>
 #include "joint_vo_sf.h"
 
+using namespace std;
 
 // ------------------------------------------------------
 //						MAIN
@@ -49,11 +50,9 @@ int main()
 	cf.initializeSceneCamera();
 
 	//Auxiliary variables
-	int pushed_key = 0;
+	int pushed_key = 0, stop = 0;
 	bool anything_new = 0;
     bool clean_sf = 0;
-	int stop = 0;
-    utils::CTicTac	main_clock, aux_clock;
 
 	
 	while (!stop)
@@ -68,7 +67,7 @@ int main()
 
         //Compute the solution (CPU)
         case 'a':
-            cf.mainIteration();
+            cf.mainIteration(false);
             cf.createOptLabelImage();
             anything_new = 1;
             break;
@@ -91,7 +90,6 @@ int main()
 		}
 	}
 
-    cf.camera.closeCamera();
 	return 0;
 }
 

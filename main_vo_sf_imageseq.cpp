@@ -11,6 +11,8 @@
 #include <string.h>
 #include "joint_vo_sf.h"
 
+using namespace std;
+
 
 // ------------------------------------------------------
 //						MAIN
@@ -36,6 +38,7 @@ int main()
 	//string dir = "D:/My RGBD sequences/Me cleaning whiteboard 1/"; im_count = 1; 
 	//string dir = "D:/My RGBD sequences/two people moving 1/"; im_count = 1;
 	cf.loadImageFromSequence(dir, im_count, res_factor);
+	cf.createImagePyramid();
 
 	//Create the 3D Scene
 	cf.initializeSceneSequencesVideo();
@@ -46,7 +49,6 @@ int main()
     bool clean_sf = 0;
 	bool continuous_run = 0;
 	int stop = 0;
-    utils::CTicTac	main_clock, aux_clock;
 
 	
 	while (!stop)
@@ -68,7 +70,7 @@ int main()
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
 			cf.loadImageFromSequence(dir, im_count, res_factor);
-            cf.mainIteration();
+            cf.mainIteration(true);
             cf.createOptLabelImage();
             anything_new = 1;
             break;
@@ -97,7 +99,7 @@ int main()
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
 			cf.loadImageFromSequence(dir, im_count, res_factor);
-            cf.mainIteration();
+            cf.mainIteration(true);
             cf.createOptLabelImage();
             anything_new = 1;
 		}
@@ -109,7 +111,6 @@ int main()
 		}
 	}
 
-    cf.camera.closeCamera();
 	return 0;
 }
 

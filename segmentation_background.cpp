@@ -28,8 +28,8 @@ void VO_SF::segmentBackgroundForeground()
 	//Refs
 	const MatrixXf &depth_old_ref = depth_old[image_level];
 	const MatrixXf &depth_warped_ref = depth_warped[image_level];
-	const MatrixXf &color_old_ref = color_old[image_level];
-	const MatrixXf &color_warped_ref = color_warped[image_level];
+	const MatrixXf &intensity_old_ref = intensity_old[image_level];
+	const MatrixXf &intensity_warped_ref = intensity_warped[image_level];
 	const MatrixXi &labels_ref = labels[image_level];
 
 
@@ -59,13 +59,13 @@ void VO_SF::segmentBackgroundForeground()
 				if (dif_depth < res_depth_t)
 				{
 					lab_res_d[labels_ref(v,u)] += edge_mask(v,u)*min(trunc_threshold, abs(dif_depth));
-					lab_res_c[labels_ref(v,u)] += edge_mask(v,u)*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
+					lab_res_c[labels_ref(v,u)] += edge_mask(v,u)*min(0.5f, abs(intensity_old_ref(v,u) - intensity_warped_ref(v,u)));
 				}
 				else if (dif_depth < 2.f*res_depth_t)
 				{
 					const float mult_factor = edge_mask(v,u)*(2.f*res_depth_t - dif_depth);
 					lab_res_d[labels_ref(v,u)] += mult_factor;
-					lab_res_c[labels_ref(v,u)] += mult_factor*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
+					lab_res_c[labels_ref(v,u)] += mult_factor*min(0.5f, abs(intensity_old_ref(v,u) - intensity_warped_ref(v,u)));
 				}		
 			}
 
@@ -79,8 +79,6 @@ void VO_SF::segmentBackgroundForeground()
 
 		//Compute the overall residual
 		weighted_res[l] = k_photometric_res*lab_res_c[l] + lab_res_d[l]/max(1e-6f,kmeans(0,l)); 
-
-		//printf("\n label %d: Backg %d, weighted_res = %f, color_res = %f, depth_res = %f, depth_kmeans = %f", l, label_in_backg[l], weighted_res, k_photometric_res*lab_res_c[l], lab_res_d[l]/depth_kmeans[l], depth_kmeans[l]);
 	}
 
 

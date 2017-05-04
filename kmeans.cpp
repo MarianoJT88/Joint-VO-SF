@@ -98,7 +98,7 @@ void VO_SF::initializeKMeans()
 		else
 		{
 			kmeans.col(l).fill(0.f);
-			printf("\n label %d is empty from the beginning", l);
+			//printf("\n label %d is empty from the beginning", l);
 		}
 	}
 }

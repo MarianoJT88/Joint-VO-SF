@@ -38,27 +38,23 @@ int main()
 	RGBD_Camera camera(res_factor);
 
 
-	//Flags and parameters
-	cf.use_backg_temp_reg = true;
-
 	//Create the 3D Scene
 	cf.initializeSceneCamera();
 
 	//Initialize camera and fill "old" images
     camera.openCamera();
     camera.disableAutoExposureAndWhiteBalance();
-	camera.loadFrame(cf.depth_wf, cf.color_wf);
+	camera.loadFrame(cf.depth_wf, cf.intensity_wf);
     cf.createImagePyramid();
-	camera.loadFrame(cf.depth_wf, cf.color_wf);
+	camera.loadFrame(cf.depth_wf, cf.intensity_wf);
     cf.createImagePyramid();
 	cf.initializeKMeans();
 
 	//Auxiliary variables for the interface
-	int pushed_key = 0;
+	int pushed_key = 0, stop = 0;
 	bool anything_new = 0;
     bool clean_sf = 0;
     bool realtime = 0;
-	int stop = 0;
     mrpt::utils::CTicTac clock; 
 
 	
@@ -74,7 +70,7 @@ int main()
 			
         //Capture a new frame
 		case  'n':
-            camera.loadFrame(cf.depth_wf, cf.color_wf);
+            camera.loadFrame(cf.depth_wf, cf.intensity_wf);
 			cf.createImagePyramid();
 			cf.kMeans3DCoordLowRes();
             cf.createOptLabelImage();
@@ -85,7 +81,7 @@ int main()
 
         //Compute the solution
         case 'a':
-            cf.mainIteration();
+            cf.mainIteration(false);
             cf.createOptLabelImage();
 
             anything_new = 1;
@@ -104,9 +100,8 @@ int main()
 
         if (realtime)
         {
-            camera.loadFrame(cf.depth_wf, cf.color_wf);
-			cf.createImagePyramid();
-            cf.mainIteration();
+            camera.loadFrame(cf.depth_wf, cf.intensity_wf);
+            cf.mainIteration(true);
             cf.createOptLabelImage();
             anything_new = 1;
         }
