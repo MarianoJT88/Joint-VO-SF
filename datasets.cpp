@@ -8,13 +8,13 @@ using namespace mrpt::math;
 using namespace std;
 using namespace Eigen;
 
-Datasets::Datasets()
+
+Datasets::Datasets(unsigned int res_factor)
 {
-    downsample = 1; // (1 - 640 x 480, 2 - 320 x 240)
+    downsample = res_factor; // (1 - 640 x 480, 2 - 320 x 240)
 	max_distance = 6.f;
 	dataset_finished = false;
 }
-
 
 void Datasets::openRawlog()
 {
@@ -29,6 +29,7 @@ void Datasets::openRawlog()
 	// Set external images directory:
 	const string imgsPath = CRawlog::detectImagesDirectory(filename);
 	CImage::IMAGES_PATH_BASE = imgsPath;
+
 
 	//					Load ground-truth
 	//=========================================================
@@ -64,10 +65,9 @@ void Datasets::openRawlog()
 
 	f_gt.close();
 	last_gt_row = 0;
-	
 }
 
-void Datasets::loadFrameAndPoseNoInterpolation(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g,Eigen::MatrixXf &im_b)
+void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g,Eigen::MatrixXf &im_b)
 {
 	if (dataset_finished)
 	{
@@ -123,7 +123,6 @@ void Datasets::loadFrameAndPoseNoInterpolation(Eigen::MatrixXf &depth_wf, Eigen:
 
 	//Groundtruth
 	//--------------------------------------------------
-
 	//Check whether the current gt is the closest one or we should read new gt
 	const float current_dif_tim = abs(gt_matrix(last_gt_row,0) - timestamp_obs);
 	const float next_dif_tim = abs(gt_matrix(last_gt_row+1,0) - timestamp_obs);
@@ -159,12 +158,6 @@ void Datasets::loadFrameAndPoseNoInterpolation(Eigen::MatrixXf &depth_wf, Eigen:
 	gt.setRotationMatrix(mat);
 	transf.setFromValues(0,0,0,0.5*M_PI, -0.5*M_PI, 0);
 
-	//Alternative - directly quaternions
-	//vector<float> quat;
-	//quat[0] = x, quat[1] = y; quat[2] = z;
-	//quat[3] = w, quat[4] = qx; quat[5] = qy; quat[6] = qz;
-	//gt.setFromXYZQ(quat);
-
 	gt_oldpose = gt_pose;
 	gt_pose = gt + transf;
 }
@@ -172,30 +165,23 @@ void Datasets::loadFrameAndPoseNoInterpolation(Eigen::MatrixXf &depth_wf, Eigen:
 
 void Datasets::CreateResultsFile()
 {
-	try
+	// Open file, find the first free file-name.
+	char	aux[100];
+	int     nFile = 0;
+	bool    free_name = false;
+
+	system::createDirectory("./odometry_results");
+
+	while (!free_name)
 	{
-		// Open file, find the first free file-name.
-		char	aux[100];
-		int     nFile = 0;
-		bool    free_name = false;
-
-		system::createDirectory("./odometry_results");
-
-		while (!free_name)
-		{
-			nFile++;
-			sprintf(aux, "./odometry_results/experiment_%03u.txt", nFile );
-			free_name = !system::fileExists(aux);
-		}
-
-		// Open log file:
-		f_res.open(aux);
-		printf(" Saving results to file: %s \n", aux);
+		nFile++;
+		sprintf(aux, "./odometry_results/experiment_%03u.txt", nFile );
+		free_name = !system::fileExists(aux);
 	}
-	catch (...)
-	{
-		printf("Exception found trying to create the 'results file' !!\n");
-	}
+
+	// Open log file:
+	f_res.open(aux);
+	printf(" Saving results to file: %s \n", aux);
 }
 
 void Datasets::writeTrajectoryFile(poses::CPose3D &cam_pose, MatrixXf &ddt)

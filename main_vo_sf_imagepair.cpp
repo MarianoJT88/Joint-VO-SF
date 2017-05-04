@@ -21,15 +21,6 @@ int main()
 	const unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
 
-	//Flags and parameters
-	cf.draw_segmented_pcloud = true;
-	cf.iter_irls = 10; //15 without 2w, 5 with 2w :)
-	cf.max_iter_per_level = 2;
-	cf.k_photometric_res = 0.15f;
-    cf.irls_chi2_decrement_threshold = 0.98f;
-    cf.irls_var_delta_threshold = 1e-6f;
-	cf.use_backg_temp_reg = false;
-
 	//Load images
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Mo and Christian/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 1/";
@@ -68,8 +59,8 @@ int main()
 	while (!stop)
 	{	
 
-        if (cf.m_window.keyHit())
-            pushed_key = cf.m_window.getPushedKey();
+        if (cf.window.keyHit())
+            pushed_key = cf.window.getPushedKey();
         else
             pushed_key = 0;
 
@@ -86,23 +77,6 @@ int main()
 		case 's':
 			cf.saveFlowAndSegmToFile(dir);
 			break;
-
-
-        //Print the velocities
-        case 'v':
-            for (unsigned int l=0; l<NUM_LABELS; l++)
-            {
-                printf("\nKai[%d] = ",l);
-                cout << cf.kai_loc[l].transpose();
-            }
-            cout << endl;
-            break;
-
-		//Show original point cloud
-		case 'b':
-			cf.showOriginalPointCloud();
-			break;
-
 			
 		//Close the program
 		case 'p':

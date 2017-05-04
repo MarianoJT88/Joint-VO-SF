@@ -34,22 +34,6 @@ public:
     }
 };
 
-//template<void (VO_SF::*F1)(cv::Rect),void (VO_SF::*F2)(cv::Rect)>
-//class VO_SF_RegionFunctor2
-//{
-//private:
-//    VO_SF &self;
-//public:
-//    VO_SF_RegionFunctor2(VO_SF &new_self) : self(new_self) {}
-//
-//    void operator()(ImageDomain const &domain) const
-//    {
-//        cv::Rect r = toRegion(domain);
-//        (self.*F1)(r);
-//        (self.*F2)(r);
-//    }
-//};
-
 typedef dvo::NormalEquation<float, 6, 2> NormalEquation;
 
 struct NormalEquationAndChi2
@@ -85,7 +69,7 @@ struct IrlsContext
     float k_Cauchy, Cauchy_factor;
     Vector6f Var;
 	unsigned int num_pixels;
-	VectorXf residuals;
+	Eigen::VectorXf residuals;
 	float sum_residuals;
 
 	inline void computeNewResiduals()
@@ -105,7 +89,7 @@ struct IrlsContext
 			sum_residuals += abs(residuals(2*i)) + abs(residuals(2*i+1));
 		}
 
-		const float mean_res = max(1e-5f, sum_residuals/float(2*num_pixels));
+		const float mean_res = std::max(1e-5f, sum_residuals/float(2*num_pixels));
 		k_Cauchy = Cauchy_factor/(mean_res*mean_res);
 	}
 };
@@ -117,7 +101,7 @@ struct IrlsElementFn
 
     IrlsElementFn(IrlsContext const &new_ctx) : ctx(new_ctx) {}
 
-    inline void update(NormalEquationAndChi2 &nes_and_chi2, Matrix2f &info, size_t i) const
+    inline void update(NormalEquationAndChi2 &nes_and_chi2, Eigen::Matrix2f &info, size_t i) const
     {
         //JacobianT::MapType J(ctx.A + i*JacobianElements);
         //ResidualT::MapType r(ctx.B + i*ResidualElements);
@@ -146,7 +130,7 @@ struct IrlsElementFn
     NormalEquationAndChi2 operator()(const Range& range, const NormalEquationAndChi2 &initial) const
     {
         NormalEquationAndChi2 r(initial);
-        Matrix2f info = Matrix2f::Identity();
+        Eigen::Matrix2f info = Eigen::Matrix2f::Identity();
         for(Range::const_iterator it = range.begin(); it != range.end(); ++it)
         {
             update(r, info, it);
@@ -169,7 +153,7 @@ struct JacobianElementFn
         const float f_inv = float(self.cols_i)/(2.f*tan(0.5f*self.fovh));
 
         NormalEquationAndChi2 result(initial);
-        Matrix2f info = Matrix2f::Identity();
+        Eigen::Matrix2f info = Eigen::Matrix2f::Identity();
 
         Eigen::MatrixXf const& depth_inter_ = self.depth_inter[self.image_level];
         Eigen::MatrixXf const& xx_inter_ = self.xx_inter[self.image_level];
@@ -180,7 +164,7 @@ struct JacobianElementFn
             JacobianT::MapType J(ws.A + it*JacobianElements);
             ResidualT::MapType r(ws.B + it*ResidualElements);
 
-            const pair<int, int> &vu = ws.indices[it];
+            const std::pair<int, int> &vu = ws.indices[it];
             const int &v = vu.first;
             const int &u = vu.second;
 
@@ -252,7 +236,7 @@ struct JacobianElementForRobustOdometryFn
             JacobianT::MapType J(ws.A + it*JacobianElements);
             ResidualT::MapType r(ws.B + it*ResidualElements);
 
-            const pair<int, int> &vu = ws.indices[it];
+            const std::pair<int, int> &vu = ws.indices[it];
             const int &v = vu.first;
             const int &u = vu.second;
 
@@ -262,7 +246,7 @@ struct JacobianElementForRobustOdometryFn
             const float x = xx_inter_(v,u);
             const float y = yy_inter_(v,u);
 
-            const float w_dinobj = max(0.f, 1.f - self.bf_segm_warped[labels_ref(v,u)]);
+            const float w_dinobj = std::max(0.f, 1.f - self.bf_segm_warped[labels_ref(v,u)]);
 
             //                                          Color
             //------------------------------------------------------------------------------------------------

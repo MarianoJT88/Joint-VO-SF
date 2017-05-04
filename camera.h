@@ -1,20 +1,13 @@
 
-#include <mrpt/utils.h>
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <OpenNI.h>
-
 #include <iostream>
-#include <fstream>
-
-using namespace mrpt;
-using namespace std;
-using namespace Eigen;
 
 
 class RGBD_Camera {
 public:
 
-    RGBD_Camera();
+    RGBD_Camera(unsigned int res_factor);
 
 	unsigned int cam_mode;
 	float max_distance;
@@ -26,10 +19,8 @@ public:
 
     bool openCamera();
     void closeCamera();
-    void loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf);
-    void waitForAutoExposure();
-    void saveImages();
-
+    void loadFrame(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf);
+    void disableAutoExposureAndWhiteBalance();
 };
 
 

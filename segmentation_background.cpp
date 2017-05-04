@@ -21,6 +21,7 @@ void VO_SF::segmentBackgroundForeground()
 	lab_res_c.fill(0.f); lab_res_d.fill(0.f); 
 	const float in_threshold = 0.2f;
 	const float trunc_threshold = 0.2f; //0.15
+	const float res_depth_t = 0.1f;
 
 	vector<float> residuals_c[NUM_LABELS], residuals_d[NUM_LABELS]; //For the median
 
@@ -31,9 +32,6 @@ void VO_SF::segmentBackgroundForeground()
 	const MatrixXf &color_warped_ref = color_warped[image_level];
 	const MatrixXi &labels_ref = labels[image_level];
 
-	final_residual_color.fill(0.f);
-	final_residual_depth.fill(0.f);
-	const float res_depth_t = 0.1f;
 
 	//First, compute a mask of edges (to downweight their residuals, they are always high no matter what segment they belong)
 	Matrix<bool, Dynamic, Dynamic> edge_mask(rows,cols); edge_mask.fill(0.f);
@@ -60,18 +58,15 @@ void VO_SF::segmentBackgroundForeground()
 				const float dif_depth = depth_old_ref(v,u) - depth_warped_ref(v,u);
 				if (dif_depth < res_depth_t)
 				{
-					final_residual_depth(v,u) = edge_mask(v,u)*min(trunc_threshold, abs(dif_depth));
-					final_residual_color(v,u) = edge_mask(v,u)*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
+					lab_res_d[labels_ref(v,u)] += edge_mask(v,u)*min(trunc_threshold, abs(dif_depth));
+					lab_res_c[labels_ref(v,u)] += edge_mask(v,u)*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
 				}
 				else if (dif_depth < 2.f*res_depth_t)
 				{
 					const float mult_factor = edge_mask(v,u)*(2.f*res_depth_t - dif_depth);
-					final_residual_depth(v,u) = mult_factor;
-					final_residual_color(v,u) = mult_factor*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
-				}
-
-				lab_res_c[labels_ref(v,u)] += final_residual_color(v,u);
-				lab_res_d[labels_ref(v,u)] += final_residual_depth(v,u);			
+					lab_res_d[labels_ref(v,u)] += mult_factor;
+					lab_res_c[labels_ref(v,u)] += mult_factor*min(0.5f, abs(color_old_ref(v,u) - color_warped_ref(v,u)));
+				}		
 			}
 
 	for (unsigned int l=0; l<NUM_LABELS; l++)
@@ -250,6 +245,10 @@ void VO_SF::warpBackgForegSegmentation()
 			}
 			else
 				bf_segm_image_warped(v,u) = 0.f;
+
+	//Off initially for the first iteration but must be turned on after that
+	if (use_backg_temp_reg == false)
+		use_backg_temp_reg = true;
 }
 
 void VO_SF::computeBackgTemporalRegValues()

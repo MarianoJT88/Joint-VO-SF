@@ -9,7 +9,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "joint_vo_sf.h"
+#include <joint_vo_sf.h>
+#include <datasets.h>
 
 
 // ------------------------------------------------------
@@ -20,38 +21,32 @@ int main()
 {	
     unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
+	Datasets dataset(res_factor);
 
 	//Flags and parameters
-	cf.draw_segmented_pcloud = true;
-	cf.iter_irls = 10;
-	cf.max_iter_per_level = 3; //2
-	cf.k_photometric_res = 0.15f;
-    cf.irls_chi2_decrement_threshold = 0.98f;
-    cf.irls_var_delta_threshold = 1e-6f;
-	cf.dataset.save_results = false;
-	cf.use_backg_temp_reg = true;
+	const bool save_results = true;
 
 
 	//Create the 3D Scene
 	cf.initializeSceneDatasetVideo();
 
 	//Open Rawlog
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_static/rgbd_dataset_freiburg3_walking_static.rawlog";
-	cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_xyz/rgbd_dataset_freiburg3_walking_xyz.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_halfsphere/rgbd_dataset_freiburg3_walking_halfsphere.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_static/rgbd_dataset_freiburg3_sitting_static.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_xyz/rgbd_dataset_freiburg3_sitting_xyz.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_halfsphere/rgbd_dataset_freiburg3_sitting_halfsphere.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_static/rgbd_dataset_freiburg3_walking_static.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_xyz/rgbd_dataset_freiburg3_walking_xyz.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_halfsphere/rgbd_dataset_freiburg3_walking_halfsphere.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_static/rgbd_dataset_freiburg3_sitting_static.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_xyz/rgbd_dataset_freiburg3_sitting_xyz.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_sitting_halfsphere/rgbd_dataset_freiburg3_sitting_halfsphere.rawlog";
 
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_desk/rgbd_dataset_freiburg1_desk.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_desk2/rgbd_dataset_freiburg1_desk2.rawlog";
-	//cf.dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy.rawlog";
+	dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_desk/rgbd_dataset_freiburg1_desk.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_desk2/rgbd_dataset_freiburg1_desk2.rawlog";
+	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy.rawlog";
 
-	if (cf.dataset.save_results)
-		cf.dataset.CreateResultsFile();
-    cf.dataset.openRawlog();
-	cf.dataset.loadFrameAndPoseNoInterpolation(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
-	cf.cam_pose = cf.dataset.gt_pose; cf.cam_oldpose = cf.dataset.gt_pose;
+	if (save_results)
+		dataset.CreateResultsFile();
+    dataset.openRawlog();
+	dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
+	cf.cam_pose = dataset.gt_pose; cf.cam_oldpose = dataset.gt_pose;
     cf.createImagePyramid();
 
 
@@ -64,8 +59,8 @@ int main()
 	while (!stop)
 	{	
 
-        if (cf.m_window.keyHit())
-            pushed_key = cf.m_window.getPushedKey();
+        if (cf.window.keyHit())
+            pushed_key = cf.window.getPushedKey();
         else
             pushed_key = 0;
 
@@ -76,12 +71,12 @@ int main()
 			cf.im_r_old.swap(cf.im_r);
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
-            cf.dataset.loadFrameAndPoseNoInterpolation(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
+            dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
 			cf.createImagePyramid();
             cf.mainIteration();
             cf.createOptLabelImage();
-			if (cf.dataset.save_results)
-				cf.dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
+			if (save_results)
+				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
             anything_new = 1;
 			break;
 
@@ -115,16 +110,6 @@ int main()
 			printf("\n Percentage of valid pixels (aver) = %f, min percentage of valid pixels = %f", perc_valid_pixels, min_perc_valid_pixels);
 			break;
 		}
-
-		//Show original point cloud
-		case 'b':
-			cf.showOriginalPointCloud();
-			break;
-
-		//Show residuals used to segment the background
-		case 'x':
-			cf.showResidualsUsedForSegmentation();
-			break;
 		
 		//Close the program
 		case 'p':
@@ -137,28 +122,28 @@ int main()
             cf.im_r_old.swap(cf.im_r);
 			cf.im_g_old.swap(cf.im_g);
 			cf.im_b_old.swap(cf.im_b);
-			cf.dataset.loadFrameAndPoseNoInterpolation(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
+			dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.color_wf, cf.im_r, cf.im_g, cf.im_b);
 			cf.createImagePyramid();
             cf.mainIteration();
             cf.createOptLabelImage();
-			if (cf.dataset.save_results)
-				cf.dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
+			if (save_results)
+				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
             anything_new = 1;
 
-			if (cf.dataset.dataset_finished)
+			if (dataset.dataset_finished)
 				realtime = false;
         }
 	
 		if (anything_new)
 		{
 			bool aux = false;
-			cf.updateSceneDatasetVideo();
+			cf.updateSceneDatasetVideo(dataset.gt_pose, dataset.gt_oldpose);
 			anything_new = 0;
 		}
 	}
 
-	if (cf.dataset.save_results)
-		cf.dataset.f_res.close();
+	if (save_results)
+		dataset.f_res.close();
 
 	return 0;
 }

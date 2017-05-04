@@ -4,10 +4,7 @@
 #include <mrpt/utils/CConfigFileBase.h>
 #include <mrpt/system/filesystem.h>
 #include <mrpt/obs/CObservation3DRangeScan.h>
-//#include <mrpt/utils/types_math.h>
-#include <Eigen/Dense>
-
-
+#include <Eigen/Core>
 #include <iostream>
 #include <fstream>
 
@@ -15,7 +12,7 @@
 class Datasets {
 public:
 
-    Datasets();
+    Datasets(unsigned int res_factor);
 
 	unsigned int rawlog_count;
 	unsigned int last_gt_row;
@@ -32,14 +29,11 @@ public:
 	mrpt::poses::CPose3D gt_oldpose;	//!< Groundtruth camera previous pose
 	double timestamp_obs;				//!< Timestamp of the last observation
 	bool dataset_finished;
-	bool save_results;
-
 
     void openRawlog();
-	void loadFrameAndPoseNoInterpolation(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g,Eigen::MatrixXf &im_b);
+	void loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g,Eigen::MatrixXf &im_b);
 	void CreateResultsFile();
 	void writeTrajectoryFile(mrpt::poses::CPose3D &cam_pose, Eigen::MatrixXf &ddt);
-
 };
 
 

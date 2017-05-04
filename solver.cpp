@@ -16,8 +16,6 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
     cols = 320;
 	fovh = M_PI*62.5/180.0;
     fovv = M_PI*48.5/180.0;
-    camera.cam_mode = res_factor;	 // (1 - 640 x 480, 2 - 320 x 240)
-	dataset.downsample = res_factor; // (1 - 640 x 480, 2 - 320 x 240)
     width = 640/res_factor;
     height = 480/res_factor;
 	ctf_levels = log2(cols/40) + 2;
@@ -25,10 +23,10 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
 	irls_chi2_decrement_threshold = 0.98f;
     irls_var_delta_threshold = 1e-6f;
 	iter_irls = 10;
-	max_iter_per_level = 2;
+	max_iter_per_level = 3;
+	use_backg_temp_reg = false;
 
 	//Velocities and poses
-	kai_loc_odometry_old.fill(0.f);
 	cam_pose.setFromValues(0,0,0,0,0,0);
 	cam_oldpose = cam_pose;
 
@@ -83,8 +81,7 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
     }
 
     //Compute gaussian and "fast-symmetric" mask
-    VectorXf v_mask(4);
-    v_mask(0) = 1.f; v_mask(1) = 2.f; v_mask(2) = 2.f; v_mask(3) = 1.f;
+    const Vector4f v_mask(1.f, 2.f, 2.f, 1.f);
     for (unsigned int i=0; i<4; i++)
         for (unsigned int j=0; j<4; j++)
             f_mask(i,j) = v_mask(i)*v_mask(j)/36.f;
@@ -92,11 +89,8 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
 
     //                      Labels
     //=========================================================
-    final_residual_color.setSize(rows,cols);
-	final_residual_depth.setSize(rows,cols);
 	bf_segm_image_warped.setSize(rows,cols);
 	bf_segm_image_warped.fill(0.f);
-
 	label_in_backg.fill(false);
 	label_in_foreg.fill(true);
 	backg_image[0].resize(rows,cols);
@@ -822,8 +816,6 @@ void VO_SF::updateVelocitiesAndTransformations(Matrix<float,6,1> &last_sol, unsi
     Matrix<float, 4, 4> log_trans = T[l].log();
     kai_loc[l](0) = log_trans(0,3); kai_loc[l](1) = log_trans(1,3); kai_loc[l](2) = log_trans(2,3);
     kai_loc[l](3) = -log_trans(1,2); kai_loc[l](4) = log_trans(0,2); kai_loc[l](5) = -log_trans(0,1);	
-
-	all_kai_levels[l].col(level) = kai_loc_level[l];
 }
 
 void VO_SF::getCameraPoseFromBackgroundEstimate()
@@ -832,18 +824,6 @@ void VO_SF::getCameraPoseFromBackgroundEstimate()
 	CMatrixDouble44 aux_acu = T_odometry;
 	poses::CPose3D pose_aux(aux_acu);
 	cam_pose = cam_pose + pose_aux;
-
-	//Transform the local velocity to the new reference frame after motion
-	//---------------------------------------------------------------------
-	CMatrixDouble33 inv_trans;
-	pose_aux.getRotationMatrix(inv_trans);
-	//kai_loc_odometry_old.topRows<3>() = inv_trans.cast<float>()*kai_loc_odometry.topRows(3);
-	//kai_loc_odometry_old.bottomRows<3>() = inv_trans.cast<float>()*kai_loc_odometry.bottomRows(3);
-	kai_loc_odometry_old.topRows<3>() = inv_trans.inverse().cast<float>()*kai_loc_odometry.topRows(3);
-	kai_loc_odometry_old.bottomRows<3>() = inv_trans.inverse().cast<float>()*kai_loc_odometry.bottomRows(3);
-	if (kai_loc_odometry_old.norm() > 1.f)
-		kai_loc_odometry_old.fill(0.f);
-
 }
 
 void VO_SF::computeTransformationFromTwist()
@@ -866,16 +846,11 @@ void VO_SF::computeTransformationFromTwist()
 
 void VO_SF::warpImagesParallel()
 {
-    //warpImages();
-    //Eigen::MatrixXf dw = depth_warped[image_level];
-
     ImageDomain domain(0, rows_i, 30, 0, cols_i, 40);
 
     typedef VO_SF_RegionFunctor<&VO_SF::warpImages> WarpImagesDelegate;
     WarpImagesDelegate warp_images(*this);
     tbb::parallel_for(domain, warp_images);
-    //float norm = (dw - depth_warped[image_level]).norm();
-    //cout << endl << "distance between classic and parallel: " << norm << endl;
 }
 
 void VO_SF::computeCoordsParallel()

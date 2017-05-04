@@ -1,13 +1,14 @@
-
 #include "camera.h"
-
 #include <PS1080.h>
 
-RGBD_Camera::RGBD_Camera()
-{
-    cam_mode = 1; // (1 - 640 x 480, 2 - 320 x 240)
-	max_distance = 4.f;
+using namespace std;
+using namespace Eigen;
 
+
+RGBD_Camera::RGBD_Camera(unsigned int res_factor)
+{
+    cam_mode = res_factor; // (1 - 640 x 480, 2 - 320 x 240)
+	max_distance = 4.5f;
 }
 
 
@@ -41,31 +42,18 @@ bool RGBD_Camera::openCamera()
 
 
     options = rgb.getVideoMode();
-    if (cam_mode == 1)
-        options.setResolution(640,480);
-    else
-        options.setResolution(320,240);
 
+    if (cam_mode == 1)	options.setResolution(640,480);
+    else		        options.setResolution(320,240);
     rc = rgb.setVideoMode(options);
     rc = rgb.setMirroringEnabled(false);
 
     options = dimage.getVideoMode();
-    if (cam_mode == 1)
-        options.setResolution(640,480);
-    else
-        options.setResolution(320,240);
-
+    if (cam_mode == 1)	options.setResolution(640,480);
+    else				options.setResolution(320,240);
     rc = dimage.setVideoMode(options);
     rc = dimage.setMirroringEnabled(false);
-    rc = dimage.setProperty(XN_STREAM_PROPERTY_GMC_MODE, false);
-
-//    //Turn off autoExposure
-//    rgb.getCameraSettings()->setAutoExposureEnabled(false);
-//    printf("Auto Exposure: %s \n", rgb.getCameraSettings()->getAutoExposureEnabled() ? "ON" : "OFF");
-
-//    //Turn off White balance
-//    rgb.getCameraSettings()->setAutoWhiteBalanceEnabled(false);
-//    printf("Auto White balance: %s \n", rgb.getCameraSettings()->getAutoWhiteBalanceEnabled() ? "ON" : "OFF");
+    rc = dimage.setProperty(XN_STREAM_PROPERTY_GMC_MODE, false); //What is this??
 
     //Check final resolution
     options = rgb.getVideoMode();
@@ -130,7 +118,7 @@ void RGBD_Camera::loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf)
             const openni::DepthPixel* pDepth = pDepthRow;
             for (int xc = width-1; xc >= 0; --xc, ++pRgb, ++pDepth)
             {
-                color_wf(yc,xc) = norm_factor*(0.299*pRgb->r + 0.587*pRgb->g + 0.114*pRgb->b);
+                color_wf(yc,xc) = norm_factor*(0.299f*pRgb->r + 0.587f*pRgb->g + 0.114f*pRgb->b);
                 depth_wf(yc,xc) = 0.001f*(*pDepth)*(*pDepth < max_dist_mm);
             }
             pRgbRow += rowSize;
@@ -139,7 +127,7 @@ void RGBD_Camera::loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf)
     }
 }
 
-void RGBD_Camera::waitForAutoExposure()
+void RGBD_Camera::disableAutoExposureAndWhiteBalance()
 {
     MatrixXf aux_depth, aux_color;
 	if (cam_mode == 1)	{aux_depth.resize(480,640); aux_color.resize(480,640);}
@@ -157,36 +145,4 @@ void RGBD_Camera::waitForAutoExposure()
     printf("Auto White balance: %s \n", rgb.getCameraSettings()->getAutoWhiteBalanceEnabled() ? "ON" : "OFF");
 }
 
-void RGBD_Camera::saveImages()
-{
-//    char	filename[100];
-
-//    //Save colour and depth old frames
-//    sprintf(filename, "/home/mariano/Desktop/intensity0.png");
-//    cv::Mat intensity(height, width, CV_8U);
-//    for (unsigned int v=0; v<height; v++)
-//        for (unsigned int u=0; u<width; u++)
-//            intensity.at<unsigned char>(v,u) = round(255.f*color_old[0](height-1-v,u));
-//    cv::imwrite(filename, intensity);
-
-//    sprintf(filename, "/home/mariano/Desktop/depth0.png");
-//    cv::Mat depth_cv(height, width, CV_16U);
-//    for (unsigned int v=0; v<height; v++)
-//        for (unsigned int u=0; u<width; u++)
-//            depth_cv.at<unsigned short>(v,u) = round(5000.f*depth_old[0](height-1-v,u));
-//    cv::imwrite(filename, depth_cv);
-
-//    //Save colour and depth artificial frames
-//    sprintf(filename, "/home/mariano/Desktop/intensity1.png");
-//    for (unsigned int v=0; v<height; v++)
-//        for (unsigned int u=0; u<width; u++)
-//            intensity.at<unsigned char>(v,u) = round(255.f*color[0](height-1-v,u));
-//    cv::imwrite(filename, intensity);
-
-//    sprintf(filename, "/home/mariano/Desktop/depth1.png");
-//    for (unsigned int v=0; v<height; v++)
-//        for (unsigned int u=0; u<width; u++)
-//            depth_cv.at<unsigned short>(v,u) = round(5000.f*depth[0](height-1-v,u));
-//    cv::imwrite(filename, depth_cv);
-}
 

@@ -23,7 +23,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "joint_vo_sf.h"
+#include <joint_vo_sf.h>
+#include <camera.h>
 
 
 // ------------------------------------------------------
@@ -34,20 +35,21 @@ int main()
 {	
     unsigned int res_factor = 1;
 	VO_SF cf(res_factor);
+	RGBD_Camera camera(res_factor);
+
 
 	//Flags and parameters
-	cf.draw_segmented_pcloud = true;
 	cf.use_backg_temp_reg = true;
 
 	//Create the 3D Scene
 	cf.initializeSceneCamera();
 
 	//Initialize camera and fill "old" images
-    cf.camera.openCamera();
-    cf.camera.waitForAutoExposure();
-	cf.camera.loadFrame(cf.depth_wf, cf.color_wf);
+    camera.openCamera();
+    camera.disableAutoExposureAndWhiteBalance();
+	camera.loadFrame(cf.depth_wf, cf.color_wf);
     cf.createImagePyramid();
-	cf.camera.loadFrame(cf.depth_wf, cf.color_wf);
+	camera.loadFrame(cf.depth_wf, cf.color_wf);
     cf.createImagePyramid();
 	cf.initializeKMeans();
 
@@ -57,14 +59,14 @@ int main()
     bool clean_sf = 0;
     bool realtime = 0;
 	int stop = 0;
-    utils::CTicTac clock; 
+    mrpt::utils::CTicTac clock; 
 
 	
 	while (!stop)
 	{	
 
-        if (cf.m_window.keyHit())
-            pushed_key = cf.m_window.getPushedKey();
+        if (cf.window.keyHit())
+            pushed_key = cf.window.getPushedKey();
         else
             pushed_key = 0;
 
@@ -72,7 +74,7 @@ int main()
 			
         //Capture a new frame
 		case  'n':
-            cf.camera.loadFrame(cf.depth_wf, cf.color_wf);
+            camera.loadFrame(cf.depth_wf, cf.color_wf);
 			cf.createImagePyramid();
 			cf.kMeans3DCoordLowRes();
             cf.createOptLabelImage();
@@ -102,7 +104,7 @@ int main()
 
         if (realtime)
         {
-            cf.camera.loadFrame(cf.depth_wf, cf.color_wf);
+            camera.loadFrame(cf.depth_wf, cf.color_wf);
 			cf.createImagePyramid();
             cf.mainIteration();
             cf.createOptLabelImage();
@@ -116,7 +118,7 @@ int main()
 		}
 	}
 
-    cf.camera.closeCamera();
+    camera.closeCamera();
 	return 0;
 }
 
