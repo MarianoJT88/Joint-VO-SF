@@ -13,16 +13,16 @@ using namespace Eigen;
 
 void VO_SF::initializeSceneCamera()
 {
-    CPose3D pose_show(0,0,1.5,0,0,0);
-	CPose3D pose_segm_pc(0,3.5,1.5,0,0,0);
+    //Initialize camera for a good visualization
+	cam_pose.setFromValues(0,0,1.5,0,0,0);
 
 	global_settings::OCTREE_RENDER_MAX_POINTS_PER_NODE = 10000000;
 	window.resize(1000,900);
 	window.setPos(900,0);
-	window.setCameraZoom(16);
+	window.setCameraZoom(8);
     window.setCameraAzimuthDeg(180);
-	window.setCameraElevationDeg(90);
-	window.setCameraPointingToPoint(0,0,1);
+	window.setCameraElevationDeg(40);
+	window.setCameraPointingToPoint(1,0,1.5);
 	//window.getDefaultViewport()->setCustomBackgroundColor(TColorf(1,1,1));
 
 	scene = window.get3DSceneAndLock();
@@ -31,29 +31,32 @@ void VO_SF::initializeSceneCamera()
 	opengl::CGridPlaneXYPtr ground = opengl::CGridPlaneXY::Create();
 	scene->insert( ground );
 
-	//Reference
-	opengl::CSetOfObjectsPtr reference = opengl::stock_objects::CornerXYZ();
-	scene->insert( reference );
+	//Camera
+	CPose3D rel_lenspose(0,-0.022,0,0,0,0);
+	CBoxPtr camera = CBox::Create(math::TPoint3D(-0.02,-0.1,-0.01),math::TPoint3D(0.02,0.1,0.01));
+	camera->setPose(cam_pose + rel_lenspose);
+	camera->setColor(0,1,0);
+	scene->insert( camera );
+
+	//Frustum
+	opengl::CFrustumPtr FOV = opengl::CFrustum::Create(0.3f, 2.f, 57.3*fovh, 57.3*fovv, 1.f, true, false);
+	FOV->setColor(0.7,0.7,0.7);
+	FOV->setPose(cam_pose);
+	scene->insert( FOV );
 
 	//Reference tk
-	opengl::CSetOfObjectsPtr referencetk = opengl::stock_objects::CornerXYZ();
-	referencetk->setScale(0.2);
-	scene->insert( referencetk );
+	opengl::CSetOfObjectsPtr reference_cam = opengl::stock_objects::CornerXYZ();
+	reference_cam->setScale(0.2);
+	reference_cam->setPose(cam_pose);
+	scene->insert( reference_cam );
 
-	//Kinect points
-	opengl::CPointCloudColouredPtr kin_points = opengl::CPointCloudColoured::Create();
-	kin_points->setColor(1,0,0);
-	kin_points->setPointSize(4);
-	kin_points->enablePointSmooth(1);
-    kin_points->setPose(pose_show);
-	scene->insert( kin_points );
-
-	//Selected point
-    opengl::CPointCloudPtr sel_point = opengl::CPointCloud::Create();
-    sel_point->setColor(0,0.6,0);
-    sel_point->setPointSize(15.f);
-    sel_point->setPose(pose_show);
-    scene->insert( sel_point );
+	//3D Points (last frame)
+	opengl::CPointCloudPtr points_lf = opengl::CPointCloud::Create();
+	points_lf->setColor(0.f, 1.f, 1.f);
+	points_lf->setPointSize(3);
+	points_lf->enablePointSmooth();
+    points_lf->setPose(cam_pose);
+	scene->insert( points_lf );
 
     //Scene Flow (includes initial point cloud)
     opengl::CVectorField3DPtr sf = opengl::CVectorField3D::Create();
@@ -62,7 +65,7 @@ void VO_SF::initializeSceneCamera()
     sf->setPointColor(1,0,0);
     sf->setVectorFieldColor(0,0,1);
     sf->enableAntiAliasing();
-    sf->setPose(pose_show);
+    sf->setPose(cam_pose);
     scene->insert( sf );
 
 	//Labels
@@ -72,12 +75,11 @@ void VO_SF::initializeSceneCamera()
 	COpenGLViewportPtr vp_backg = scene->createViewport("background");
     vp_backg->setViewportPosition(0.1,0.05,240,180);
 
-
 	window.unlockAccess3DScene();
 	window.repaint();
 }
 
-void VO_SF::initializeSceneDatasetVideo()
+void VO_SF::initializeSceneDatasets()
 {
 
 	global_settings::OCTREE_RENDER_MAX_POINTS_PER_NODE = 10000000;
@@ -85,8 +87,8 @@ void VO_SF::initializeSceneDatasetVideo()
 	window.setPos(300,0);
 	window.setCameraZoom(8);
     window.setCameraAzimuthDeg(180);
-	window.setCameraElevationDeg(90);
-	window.setCameraPointingToPoint(0,0,1);
+	window.setCameraElevationDeg(30);
+	window.setCameraPointingToPoint(0,0,0);
 	window.getDefaultViewport()->setCustomBackgroundColor(TColorf(1,1,1));
 
 	scene = window.get3DSceneAndLock();
@@ -127,14 +129,6 @@ void VO_SF::initializeSceneDatasetVideo()
 	sf_points->enablePointSmooth(1);
 	scene->insert( sf_points );
 
-    //Scene Flow (includes initial point cloud)
-    opengl::CVectorField3DPtr sf = opengl::CVectorField3D::Create();
-    sf->setPointSize(3.0f);
-    sf->setLineWidth(2.0f);
-    sf->setPointColor(1,0,0);
-    sf->setVectorFieldColor(0,0,1);
-    sf->enableAntiAliasing();
-    scene->insert( sf );
 
 
 	//Labels
@@ -152,23 +146,41 @@ void VO_SF::initializeSceneDatasetVideo()
 	window.repaint();
 }
 
-void VO_SF::initializeSceneSequencesVideo()
+void VO_SF::initializeSceneImageSeq()
 {
 	const unsigned int repr_level = round(log2(width/cols));
 
 	global_settings::OCTREE_RENDER_MAX_POINTS_PER_NODE = 10000000;
 	window.resize(1600,800);
 	window.setPos(300,0);
-	window.setCameraZoom(8);
+	window.setCameraZoom(6);
     window.setCameraAzimuthDeg(180);
-	window.setCameraElevationDeg(90);
-	window.setCameraPointingToPoint(0,0,1);
+	window.setCameraElevationDeg(15);
+	window.setCameraPointingToPoint(0,-1,0);
 	window.getDefaultViewport()->setCustomBackgroundColor(TColorf(1,1,1));
-	window.captureImagesStart();
 	scene = window.get3DSceneAndLock();
 
+	//Camera
+	CPose3D rel_lenspose(0,-0.022,0,0,0,0);
+	CBoxPtr camera = CBox::Create(math::TPoint3D(-0.02,-0.1,-0.01),math::TPoint3D(0.02,0.1,0.01));
+	camera->setPose(cam_pose + rel_lenspose);
+	camera->setColor(0,1,0);
+	scene->insert( camera );
 
-	//Segmented points (original)
+	//Frustum
+	opengl::CFrustumPtr FOV = opengl::CFrustum::Create(0.3f, 2.f, 57.3*fovh, 57.3*fovv, 1.f, true, false);
+	FOV->setColor(0.7,0.7,0.7);
+	FOV->setPose(cam_pose);
+	scene->insert( FOV );
+
+	//Reference tk
+	opengl::CSetOfObjectsPtr reference_cam = opengl::stock_objects::CornerXYZ();
+	reference_cam->setScale(0.2);
+	reference_cam->setPose(cam_pose);
+	scene->insert( reference_cam );
+
+
+	//3D points (last frame)
 	opengl::CPointCloudColouredPtr seg_points = opengl::CPointCloudColoured::Create();
 	seg_points->setColor(1,0,0);
 	seg_points->setPointSize(2);
@@ -199,13 +211,12 @@ void VO_SF::initializeSceneSequencesVideo()
 	COpenGLViewportPtr vp_backg = scene->createViewport("background");
 	vp_backg->setViewportPosition(0.775,0.025,320,240);
 
-
 	window.unlockAccess3DScene();
 	window.repaint();
 }
 
 
-void VO_SF::updateSceneCamera(bool &clean_sf)
+void VO_SF::updateSceneCamera(bool clean_sf)
 {
 	const unsigned int repr_level = round(log2(width/cols));
 	CImage image;
@@ -221,12 +232,29 @@ void VO_SF::updateSceneCamera(bool &clean_sf)
 	
 	scene = window.get3DSceneAndLock();
 
-	opengl::CPointCloudColouredPtr kin_points = scene->getByClass<CPointCloudColoured>(0);
+	//Camera
+	CPose3D rel_lenspose(0,-0.022,0,0,0,0);
+	CBoxPtr camera = scene->getByClass<CBox>(0);
+	camera->setPose(cam_pose + rel_lenspose);
+	scene->insert( camera );
+
+	//Frustum
+	opengl::CFrustumPtr FOV = scene->getByClass<CFrustum>(0);
+	FOV->setPose(cam_pose);
+	scene->insert( FOV );
+
+	//Reference tk
+	opengl::CSetOfObjectsPtr reference_cam = scene->getByClass<CSetOfObjects>(0);
+	reference_cam->setPose(cam_pose);
+	scene->insert( reference_cam );
+
+	//Points of the last frame
+	opengl::CPointCloudPtr kin_points = scene->getByClass<CPointCloud>(0);
 	kin_points->clear();
 	for (unsigned int u=0; u<cols; u++)
 		for (unsigned int v=0; v<rows; v++)
             if (depth_ref(v,u) != 0.f)
-                kin_points->push_back(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u), 0.f, 1.f, 1.f);
+                kin_points->insertPoint(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u));
 
 
     //Scene flow
@@ -235,7 +263,6 @@ void VO_SF::updateSceneCamera(bool &clean_sf)
         motionfield[0].assign(0.f);
         motionfield[1].assign(0.f);
         motionfield[2].assign(0.f);
-		clean_sf = false;
     }
 
 	opengl::CVectorField3DPtr sf = scene->getByClass<CVectorField3D>(0);
@@ -245,7 +272,6 @@ void VO_SF::updateSceneCamera(bool &clean_sf)
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
     image.setFromRGBMatrices(olabels_image[0], olabels_image[1], olabels_image[2], true);
-	//image.setFromMatrix(color_wf, true);
     image.flipVertical();
     vp_labels->setImageView(image);
 
@@ -260,7 +286,7 @@ void VO_SF::updateSceneCamera(bool &clean_sf)
 	window.repaint();
 }
 
-void VO_SF::updateSceneDatasetVideo(const CPose3D &gt, const CPose3D &gt_old)
+void VO_SF::updateSceneDatasets(const CPose3D &gt, const CPose3D &gt_old)
 {
 	const unsigned int repr_level = round(log2(width/cols));
 	CImage image;
@@ -281,14 +307,14 @@ void VO_SF::updateSceneDatasetVideo(const CPose3D &gt, const CPose3D &gt_old)
 	reference_est->setPose(cam_pose);
 	scene->insert( reference_est );
 
-	//Segmented points
-	opengl::CPointCloudColouredPtr seg_points = scene->getByClass<CPointCloudColoured>(0);
-	seg_points->clear();
-	seg_points->setPose(gt);
-	for (unsigned int y=0; y<cols; y++)
-		for (unsigned int z=0; z<rows; z++)
-            if (depth_ref(z,y) != 0.f)
-				seg_points->push_back(depth_ref(z,y), xx_ref(z,y), yy_ref(z,y), im_r(z,y), im_g(z,y), im_b(z,y));
+	//Points
+	opengl::CPointCloudColouredPtr points = scene->getByClass<CPointCloudColoured>(0);
+	points->clear();
+	points->setPose(gt);
+	for (unsigned int u=0; u<cols; u++)
+		for (unsigned int v=0; v<rows; v++)
+            if (depth_ref(v,u) != 0.f)
+				points->push_back(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u), im_r(v,u), im_g(v,u), im_b(v,u));
 
 
 	//Trajectories
@@ -297,23 +323,6 @@ void VO_SF::updateSceneDatasetVideo(const CPose3D &gt, const CPose3D &gt_old)
 
 	opengl::CSetOfLinesPtr gt_traj = scene->getByClass<CSetOfLines>(1);
 	gt_traj->appendLine(gt[0], gt[1], gt[2], gt_old[0], gt_old[1], gt_old[2]);
-
-
-
-	//Scene flow
-	//opengl::CPointCloudPtr points_sf = scene->getByClass<CPointCloud>(0);
-	//CPose3D aux_pose_sf = dataset.gt_pose + CPose3D(4,4,0,0,0,0);
-	//points_sf->clear();
-	//points_sf->setPose(aux_pose_sf);
-	//for (unsigned int y=0; y<cols; y++)
-	//	for (unsigned int z=0; z<rows; z++)
- //           if (depth[repr_level](z,y) > 0.f)
- //               points_sf->insertPoint(depth[repr_level](z,y), xx[repr_level](z,y), yy[repr_level](z,y));
-
-	opengl::CVectorField3DPtr sf = scene->getByClass<CVectorField3D>(0);
-	//sf->setPose(aux_pose_sf);
- //   sf->setPointCoordinates(depth_old[repr_level], xx_old[repr_level], yy_old[repr_level]);
- //   sf->setVectorField(motionfield[0], motionfield[1], motionfield[2]);
 
 
 	//Image
@@ -342,7 +351,7 @@ void VO_SF::updateSceneDatasetVideo(const CPose3D &gt, const CPose3D &gt_old)
 
 }
 
-void VO_SF::updateSceneSequencesVideo()
+void VO_SF::updateSceneImageSeq()
 {
 	const unsigned int repr_level = round(log2(width/cols));
 	CImage image;
@@ -355,46 +364,45 @@ void VO_SF::updateSceneSequencesVideo()
 	
 	scene = window.get3DSceneAndLock();
 
-	//Segmented points
-	opengl::CPointCloudColouredPtr seg_points = scene->getByClass<CPointCloudColoured>(0);
-	seg_points->clear();
+	//Camera
+	CPose3D rel_lenspose(0,-0.022,0,0,0,0);
+	CBoxPtr camera = scene->getByClass<CBox>(0);
+	camera->setPose(cam_pose + rel_lenspose);
+	scene->insert( camera );
+
+	//Frustum
+	opengl::CFrustumPtr FOV = scene->getByClass<CFrustum>(0);
+	FOV->setPose(cam_pose);
+	scene->insert( FOV );
+
+	//Reference tk
+	opengl::CSetOfObjectsPtr reference_cam = scene->getByClass<CSetOfObjects>(0);
+	reference_cam->setPose(cam_pose);
+	scene->insert( reference_cam );
+
+	//3D points (last frame)
+	opengl::CPointCloudColouredPtr points = scene->getByClass<CPointCloudColoured>(0);
+	points->setPose(cam_pose);
+	points->clear();
 	const float brigthing_fact = 0.7f;
-	for (unsigned int y=0; y<cols; y++)
-		for (unsigned int z=0; z<rows; z++)
-            if (depth_old_ref(z,y) != 0.f)
-			{
-				
-				float mult;
-				if (bf_segm[labels_ref(z,y)] < 0.333f)
-					mult = 0.15f;
-				else
-					mult = brigthing_fact + (1.f - brigthing_fact)*0.f; //bf_segm[labels[repr_level](z,y)];
+	for (unsigned int u=0; u<cols; u++)
+		for (unsigned int v=0; v<rows; v++)
+            if (depth_old_ref(v,u) != 0.f)
+			{		
+				const float mult = (bf_segm[labels_ref(v,u)] < 0.333f) ? 0.25f : brigthing_fact;
+				const float red = mult*(im_r_old(v,u)-1.f)+1.f;
+				const float green = mult*(im_g_old(v,u)-1.f)+1.f;
+				const float blue = mult*(im_b_old(v,u)-1.f)+1.f;
 
-				const float red = mult*(im_r_old(z,y)-1.f)+1.f;
-				const float green = mult*(im_g_old(z,y)-1.f)+1.f;
-				const float blue = mult*(im_b_old(z,y)-1.f)+1.f;
-
-				seg_points->push_back(depth_old_ref(z,y), xx_old_ref(z,y), yy_old_ref(z,y), red, green, blue);			
+				points->push_back(depth_old_ref(v,u), xx_old_ref(v,u), yy_old_ref(v,u), red, green, blue);			
 			}
 
 
 	//Scene flow
-	const unsigned int sf_level = repr_level + 0;
-	const unsigned int s = pow(2.f,int(sf_level - repr_level));
-	cols_i = cols/s; rows_i = rows/s;
-
-	MatrixXf mx(rows_i, cols_i), my(rows_i, cols_i), mz(rows_i, cols_i);
-	for (unsigned int u=0; u<cols_i; u++)
-		for (unsigned int v=0; v<rows_i; v++)
-		{
-			mx(v,u) = motionfield[0](s*v, s*u);
-			my(v,u) = motionfield[1](s*v, s*u);
-			mz(v,u) = motionfield[2](s*v, s*u);		
-		}
-
 	opengl::CVectorField3DPtr sf = scene->getByClass<CVectorField3D>(0);
-    sf->setPointCoordinates(depth_old[sf_level], xx_old[sf_level], yy_old[sf_level]);
-    sf->setVectorField(mx, my, mz);
+	sf->setPose(cam_pose);
+    sf->setPointCoordinates(depth_old[repr_level], xx_old[repr_level], yy_old[repr_level]);
+    sf->setVectorField(motionfield[0], motionfield[1], motionfield[2]);
 
 
 	//Image

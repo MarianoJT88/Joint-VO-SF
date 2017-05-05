@@ -21,8 +21,6 @@
 **																				**
 *********************************************************************************/
 
-#include <stdio.h>
-#include <string.h>
 #include <joint_vo_sf.h>
 #include <camera.h>
 
@@ -41,7 +39,7 @@ int main()
 	//Create the 3D Scene
 	cf.initializeSceneCamera();
 
-	//Initialize camera and fill "old" images
+	//Initialize camera and method
     camera.openCamera();
     camera.disableAutoExposureAndWhiteBalance();
 	camera.loadFrame(cf.depth_wf, cf.intensity_wf);
@@ -51,11 +49,9 @@ int main()
 	cf.initializeKMeans();
 
 	//Auxiliary variables for the interface
-	int pushed_key = 0, stop = 0;
-	bool anything_new = 0;
-    bool clean_sf = 0;
-    bool realtime = 0;
-    mrpt::utils::CTicTac clock; 
+	int pushed_key = 0;
+	bool anything_new = false, stop = false;
+    bool clean_sf = false, continuous_exec = false;
 
 	
 	while (!stop)
@@ -75,8 +71,8 @@ int main()
 			cf.kMeans3DCoordLowRes();
             cf.createOptLabelImage();
 
-            anything_new = 1;
-            clean_sf = 1;
+            anything_new = true;
+            clean_sf = true;
 			break;
 
         //Compute the solution
@@ -84,21 +80,27 @@ int main()
             cf.mainIteration(false);
             cf.createOptLabelImage();
 
-            anything_new = 1;
+            anything_new = true;
             break;
 
         //Turn on/off continuous estimation
         case 's':
-            realtime = !realtime;
+            continuous_exec = !continuous_exec;
             break;
+
+		//Reset the camera pose
+		case 'r':
+			cf.cam_pose.setFromValues(0,0,1.5,0,0,0);
+			anything_new = true;
+			break;
 			
 		//Close the program
 		case 'p':
-			stop = 1;
+			stop = true;
 			break;
 		}
 
-        if (realtime)
+        if (continuous_exec)
         {
             camera.loadFrame(cf.depth_wf, cf.intensity_wf);
             cf.mainIteration(true);
@@ -109,6 +111,7 @@ int main()
 		if (anything_new)
 		{
 			cf.updateSceneCamera(clean_sf);
+			clean_sf = false;
 			anything_new = 0;
 		}
 	}

@@ -267,28 +267,5 @@ void VO_SF::computeBackgTemporalRegValues()
 			bf_segm_warped[l] /= size_kmeans_maxres[l];
 }
 
-void VO_SF::countMovingAndUncertainPixels()
-{	
-	unsigned int mov_pixels_now = 0, uncertain_pixels_now = 0, valid_pixels_now = 0;;
-	for (unsigned int l=0; l<NUM_LABELS; l++)
-	{
-		if ((label_in_backg[l] == false)&&(label_in_foreg[l] == true))
-			mov_pixels_now += size_kmeans_maxres[l];
-
-		else if (label_in_foreg[l] == true)
-			uncertain_pixels_now += size_kmeans_maxres[l];
-
-		valid_pixels_now += size_kmeans_maxres[l];
-	}
-
-	num_mov_pixels += mov_pixels_now;
-	num_uncertain_pixels += uncertain_pixels_now;
-	num_valid_pixels += valid_pixels_now;
-
-	min_num_valid_pixels = min(min_num_valid_pixels, valid_pixels_now);
-	num_images++;
-
-	//printf("\n Percentage of moving pixels = %f, percentage of uncertain pixels = %f", float(mov_pixels_now)/float(rows*cols), float(uncertain_pixels_now)/float(rows*cols));
-}
 
 

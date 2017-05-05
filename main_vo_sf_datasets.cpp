@@ -40,11 +40,7 @@ int main()
 	//Flags and parameters
 	const bool save_results = true;
 
-
-	//Create the 3D Scene
-	cf.initializeSceneDatasetVideo();
-
-	//Open Rawlog
+	//Set dir of the Rawlog file
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_static/rgbd_dataset_freiburg3_walking_static.rawlog";
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_xyz/rgbd_dataset_freiburg3_walking_xyz.rawlog";
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_halfsphere/rgbd_dataset_freiburg3_walking_halfsphere.rawlog";
@@ -56,6 +52,10 @@ int main()
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_desk2/rgbd_dataset_freiburg1_desk2.rawlog";
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy.rawlog";
 
+	//Create the 3D Scene
+	cf.initializeSceneDatasets();
+
+	//Initiallize
 	if (save_results)
 		dataset.CreateResultsFile();
     dataset.openRawlog();
@@ -66,8 +66,7 @@ int main()
 
 	//Auxiliary variables
 	int pushed_key = 0, stop = 0;
-	bool anything_new = 0;
-    bool realtime = 0;
+	bool anything_new = false, continuous_exec = false;
 	
 	while (!stop)
 	{	
@@ -92,36 +91,10 @@ int main()
             anything_new = 1;
 			break;
 
-        //Only solve
-        case 'a':
-            cf.mainIteration(false);
-            cf.createOptLabelImage();
-            anything_new = 1;
-            break;
-
         //Turn on/off continuous estimation
         case 's':
-            realtime = !realtime;
+            continuous_exec = !continuous_exec;
             break;
-
-		//Save segmentation in color
-        case 'g':
-            cf.createOptLabelImage();
-			cf.saveSegmentationImage();
-            fflush(stdout);
-            break;
-
-        //Compute percentage of moving and uncertain pixels
-        case 'e':
-		{
-			const float perc_moving_pixels = float(cf.num_mov_pixels)/float(cf.num_valid_pixels);
-			const float perc_uncertain_pixels = float(cf.num_uncertain_pixels)/float(cf.num_valid_pixels);
-			const float perc_valid_pixels = float(cf.num_valid_pixels)/float(cf.num_images*cf.rows*cf.cols);
-			const float min_perc_valid_pixels = float(cf.min_num_valid_pixels)/float(cf.rows*cf.cols);
-			printf("\n Percentage of moving pixels = %f, Percentage of uncertain pixels = %f", perc_moving_pixels, perc_uncertain_pixels);
-			printf("\n Percentage of valid pixels (aver) = %f, min percentage of valid pixels = %f", perc_valid_pixels, min_perc_valid_pixels);
-			break;
-		}
 		
 		//Close the program
 		case 'p':
@@ -129,7 +102,7 @@ int main()
 			break;
 		}
 
-        if (realtime)
+        if (continuous_exec)
         {
             cf.im_r_old.swap(cf.im_r);
 			cf.im_g_old.swap(cf.im_g);
@@ -142,13 +115,13 @@ int main()
             anything_new = 1;
 
 			if (dataset.dataset_finished)
-				realtime = false;
+				continuous_exec = false;
         }
 	
 		if (anything_new)
 		{
 			bool aux = false;
-			cf.updateSceneDatasetVideo(dataset.gt_pose, dataset.gt_oldpose);
+			cf.updateSceneDatasets(dataset.gt_pose, dataset.gt_oldpose);
 			anything_new = 0;
 		}
 	}

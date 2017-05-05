@@ -85,7 +85,8 @@ public:
 	Eigen::Array44f f_mask;
 
     //Velocities, transformations and poses
-    std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > T;
+    //std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > T;
+	Eigen::Matrix4f T[NUM_LABELS];
     Vector6f kai_loc[NUM_LABELS], kai_loc_level[NUM_LABELS];
 	Eigen::Matrix4f T_odometry;
 	Vector6f kai_loc_odometry, kai_loc_level_odometry;
@@ -99,7 +100,6 @@ public:
     unsigned int width, height;
 	unsigned int ctf_levels;
 	unsigned int image_level, level;
-
 
     VO_SF(unsigned int res_factor);
     void createImagePyramid();
@@ -121,6 +121,7 @@ public:
 	void computeTransformationFromTwist();
 
 
+
 	//							Solver
 	//--------------------------------------------------------------
 	unsigned int iter_irls;
@@ -135,25 +136,27 @@ public:
 	void solveRobustOdometryCauchy();
 
 
-    //							Scene
+
+    //						3D Scene
 	//--------------------------------------------------------------
 	mrpt::gui::CDisplayWindow3D		window;
 	mrpt::opengl::COpenGLScenePtr	scene;
 
 	void initializeSceneCamera();
-	void initializeSceneDatasetVideo();
-	void initializeSceneSequencesVideo();
-	void updateSceneCamera(bool &clean_sf);
-	void updateSceneDatasetVideo(const mrpt::poses::CPose3D &gt, const mrpt::poses::CPose3D &gt_old);
-	void updateSceneSequencesVideo();
+	void initializeSceneDatasets();
+	void initializeSceneImageSeq();
+	void updateSceneCamera(bool clean_sf);
+	void updateSceneDatasets(const mrpt::poses::CPose3D &gt, const mrpt::poses::CPose3D &gt_old);
+	void updateSceneImageSeq();
 
 
 
-    //Input / Output
+    //					Input / Output
 	//--------------------------------------------------------------
-	void loadImagePairFromFiles(std::string files_dir, bool is_Quiroga, unsigned int res_factor);
-	void loadImageFromSequence(std::string files_dir, unsigned int index, unsigned int res_factor);
+	void loadImagePairFromFiles(std::string files_dir, unsigned int res_factor);
+	bool loadImageFromSequence(std::string files_dir, unsigned int index, unsigned int res_factor);
 	void saveFlowAndSegmToFile(std::string files_dir);
+
 
 
     //					Geometric clustering
@@ -184,10 +187,6 @@ public:
 	void optimizeSegmentation(Eigen::Matrix<float, NUM_LABELS, 1> &r);
 	void warpBackgForegSegmentation();
 	void computeBackgTemporalRegValues();
-	void saveSegmentationImage();
-	void countMovingAndUncertainPixels();
-	unsigned int num_valid_pixels, num_mov_pixels, num_uncertain_pixels;
-	unsigned int min_num_valid_pixels, num_images;
 };
 
 #endif

@@ -1,17 +1,30 @@
 
-//*******************************************************
-// Authors: Mariano Jaimez Tarifa & Christian Kerl
-// Organizations: MAPIR, University of Malaga
-//				  Computer Vision group, TUM
-// Dates: September 2015 - present
-// License: GNU GPL3
-//*******************************************************
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
-#include <stdio.h>
 #include <string.h>
 #include "joint_vo_sf.h"
 
-using namespace std;
 
 // ------------------------------------------------------
 //						MAIN
@@ -19,6 +32,7 @@ using namespace std;
 
 int main()
 {	
+	const bool save_results = false;
 	const unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
 
@@ -35,61 +49,29 @@ int main()
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Giraff 4/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Me moving 1/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Me moving 2/";
-	string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Two people 1/"; //*****************************
+	std::string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Two people 1/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Whiteboard 1/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Door 1/";
 	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Door 2/";
 
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Quiroga hand/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Quiroga person/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Quiroga tree/";
-
-	cf.loadImagePairFromFiles(dir, false, res_factor);
+	//Load images and create both pyramids
+	cf.loadImagePairFromFiles(dir, res_factor);
 
 	//Create the 3D Scene
 	cf.initializeSceneCamera();
 
-	//Auxiliary variables
-	int pushed_key = 0, stop = 0;
-	bool anything_new = 0;
-    bool clean_sf = 0;
+	//Run the algorithm
+	cf.mainIteration(false);
+    cf.createOptLabelImage();
 
-	
-	while (!stop)
-	{	
+	//Update the 3D scene
+	cf.updateSceneCamera(false);
 
-        if (cf.window.keyHit())
-            pushed_key = cf.window.getPushedKey();
-        else
-            pushed_key = 0;
+	//Save results?
+	if (save_results)
+		cf.saveFlowAndSegmToFile(dir);
 
-		switch (pushed_key) {
-
-        //Compute the solution (CPU)
-        case 'a':
-            cf.mainIteration(false);
-            cf.createOptLabelImage();
-            anything_new = 1;
-            break;
-
-		//Save flow to file
-		case 's':
-			cf.saveFlowAndSegmToFile(dir);
-			break;
-			
-		//Close the program
-		case 'p':
-			stop = 1;
-			break;
-		}
-	
-		if (anything_new)
-		{
-			cf.updateSceneCamera(clean_sf);
-			anything_new = 0;
-		}
-	}
-
+	mrpt::system::os::getch();
 	return 0;
 }
 

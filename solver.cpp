@@ -10,9 +10,9 @@ using namespace std;
 using namespace Eigen;
 
 
-VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), ws_background(640*480)
+VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(640*480), ws_background(640*480)  //I don't know why it crashes if I set the right resolution here **************************
 {
-    rows = 240; //I should also change the amount of pixels to remove a label
+    rows = 240;
     cols = 320;
 	fovh = M_PI*62.5/180.0;
     fovv = M_PI*48.5/180.0;
@@ -111,16 +111,9 @@ VO_SF::VO_SF(unsigned int res_factor) : T(NUM_LABELS), ws_foreground(640*480), w
             labels_opt[i].assign(0.f);
         }
     }
-
-	//Statistics for the segmentation
-	num_valid_pixels = 0;
-	num_mov_pixels = 0;
-	num_uncertain_pixels = 0;
-	min_num_valid_pixels = rows*cols;
-	num_images = 0;
 }
 
-void VO_SF::loadImagePairFromFiles(string files_dir, bool is_Quiroga, unsigned int res_factor)
+void VO_SF::loadImagePairFromFiles(string files_dir, unsigned int res_factor)
 {
     const float norm_factor = 1.f/255.f;
     char aux[30];
@@ -146,9 +139,6 @@ void VO_SF::loadImagePairFromFiles(string files_dir, bool is_Quiroga, unsigned i
         for (unsigned int u=0; u<width; u++)
             depth_wf(height-1-v,u) = depth_float.at<float>(res_factor*v+1,res_factor*u);
 
-	if (is_Quiroga)
-		depth_wf *= 5.f;
-
 	createImagePyramid();
 
 
@@ -172,13 +162,10 @@ void VO_SF::loadImagePairFromFiles(string files_dir, bool is_Quiroga, unsigned i
         for (unsigned int u=0; u<width; u++)
             depth_wf(height-1-v,u) = depth_float.at<float>(res_factor*v+1,res_factor*u);
 
-	if (is_Quiroga)
-		depth_wf *= 5.f;
-
 	createImagePyramid();
 }
 
-void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned int res_factor)
+bool VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned int res_factor)
 {
     const float norm_factor = 1.f/255.f;
     char aux[30];
@@ -189,6 +176,14 @@ void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned
     string name = files_dir + aux;
 
 	cv::Mat color = cv::imread(name.c_str(), CV_LOAD_IMAGE_COLOR);
+
+	if (color.data == NULL)
+	{
+		printf("\n End of sequence (or color image not found...)");
+		return true;
+	}
+		
+
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
 		{
@@ -209,6 +204,8 @@ void VO_SF::loadImageFromSequence(string files_dir, unsigned int index, unsigned
     for (unsigned int v=0; v<height; v++)
         for (unsigned int u=0; u<width; u++)
             depth_wf(height-1-v,u) = depth_float.at<float>(res_factor*v,res_factor*u);
+
+	return false;
 }
 
 void VO_SF::saveFlowAndSegmToFile(string files_dir)
@@ -256,18 +253,6 @@ void VO_SF::saveFlowAndSegmToFile(string files_dir)
     name = files_dir + aux;
 	cv::imwrite(name, kmeans);
 	cout << endl << "Segmentation (kmeans) saved in " << name;
-}
-
-void VO_SF::saveSegmentationImage()
-{
-	cv::Mat segm(rows, cols, CV_8UC3);
-    for (unsigned int v=0; v<rows; v++)
-        for (unsigned int u=0; u<cols; u++)
-			segm.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f*backg_image[2](rows-1-v,u), 255.f*backg_image[1](rows-1-v,u), 255.f*backg_image[0](rows-1-v,u));
-
-	string name = ".../segmentation_color.png"; //Set the directory where it should be saved here
-	cv::imwrite(name, segm);
-	cout << endl << "Segmentation image saved in " << name;
 }
 
 
@@ -1018,12 +1003,12 @@ void VO_SF::mainIteration(bool create_image_pyr)
 {
 	CTicTac clock; clock.Tic();
 	
-	//          Create the image pyramid if it has not been computed yet
+	//Create the image pyramid if it has not been computed yet
     //----------------------------------------------------------------------------------
 	if (create_image_pyr) 
 		createImagePyramid();
 
-    //                                Create labels
+    //Create labels
     //----------------------------------------------------------------------------------
     //Kmeans
 	kMeans3DCoordLowRes();
@@ -1066,7 +1051,6 @@ void VO_SF::mainIteration(bool create_image_pyr)
 			}
 			else 
                 warpImagesOld(); // forward warping, more precise
-                //warpImagesParallel(); // inverse warping
 
 
 			//2. Compute inter coords (better linearization of the range and optical flow constraints)
@@ -1138,11 +1122,11 @@ void VO_SF::mainIteration(bool create_image_pyr)
 	// Refine static/dynamic segmentation and warp it to use it in the next iteration
 	segmentBackgroundForeground();
 	warpBackgForegSegmentation();
-	//countMovingAndUncertainPixels();
 
     //Compute the scene flow from the rigid motions and the labels
 	computeSceneFlowFromRigidMotions();
 
+	//Runtime
 	const float runtime = 1000.f*clock.Tac();
 	printf("\n Runtime = %f (ms) ", runtime);
 	if (create_image_pyr)	printf("including the image pyramid");
@@ -1151,7 +1135,8 @@ void VO_SF::mainIteration(bool create_image_pyr)
 
 void VO_SF::computeSceneFlowFromRigidMotions()
 {
-    const unsigned int repr_level = round(log2(width/cols));
+    //Scene flow is only computed for uncertain or dynamic clusters
+	const unsigned int repr_level = round(log2(width/cols));
 
     //Compute the rigid transformation associated to the labels
     Matrix4f mytrans[NUM_LABELS];
@@ -1162,22 +1147,23 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 	const MatrixXf &depth_old_ref = depth_old[repr_level];
 	const MatrixXf &xx_old_ref = xx_old[repr_level];
 	const MatrixXf &yy_old_ref = yy_old[repr_level];
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_opt_ref = labels_opt[image_level];
+	const MatrixXi &labels_ref = labels[image_level];
 
 	Matrix4f trans; 
     for (unsigned int u = 0; u<cols; u++)
         for (unsigned int v = 0; v<rows; v++)
         {
-            const float z = depth_old_ref(v,u);
+			const float z = depth_old_ref(v,u);
 			const int pixel_label = v + u*rows;
 
-			if (z != 0.f)
+			if ((z != 0.f)&&(bf_segm[labels_ref(v,u)] > 0.333f))
             {			
 				//Interpolate between the transformations
                 trans.fill(0.f);
                 for (unsigned int l=0; l<NUM_LABELS; l++)
-                    if (labels_ref(l,pixel_label) != 0.f)
-                        trans += labels_ref(l,pixel_label)*mytrans[l];
+                    if (labels_opt_ref(l,pixel_label) != 0.f)
+                        trans += labels_opt_ref(l,pixel_label)*mytrans[l];
 
                 //Transform point to the warped reference frame
                 motionfield[0](v,u) = trans(0,0)*z + trans(0,1)*xx_old_ref(v,u) + trans(0,2)*yy_old_ref(v,u) + trans(0,3) - z;
