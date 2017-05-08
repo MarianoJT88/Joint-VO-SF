@@ -271,7 +271,7 @@ void VO_SF::updateSceneCamera(bool clean_sf)
 
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
-    image.setFromRGBMatrices(olabels_image[0], olabels_image[1], olabels_image[2], true);
+    image.setFromRGBMatrices(labels_image[0], labels_image[1], labels_image[2], true);
     image.flipVertical();
     vp_labels->setImageView(image);
 
@@ -311,10 +311,12 @@ void VO_SF::updateSceneDatasets(const CPose3D &gt, const CPose3D &gt_old)
 	opengl::CPointCloudColouredPtr points = scene->getByClass<CPointCloudColoured>(0);
 	points->clear();
 	points->setPose(gt);
+	const unsigned int size_factor = width/cols;
 	for (unsigned int u=0; u<cols; u++)
 		for (unsigned int v=0; v<rows; v++)
             if (depth_ref(v,u) != 0.f)
-				points->push_back(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u), im_r(v,u), im_g(v,u), im_b(v,u));
+				points->push_back(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u),
+								im_r(size_factor*v,size_factor*u), im_g(size_factor*v,size_factor*u), im_b(size_factor*v,size_factor*u));
 
 
 	//Trajectories
@@ -334,7 +336,7 @@ void VO_SF::updateSceneDatasets(const CPose3D &gt, const CPose3D &gt_old)
 
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
-    image.setFromRGBMatrices(olabels_image[0], olabels_image[1], olabels_image[2], true);
+    image.setFromRGBMatrices(labels_image[0], labels_image[1], labels_image[2], true);
     image.flipVertical();
 	image.flipHorizontal();
     vp_labels->setImageView(image);
@@ -385,14 +387,15 @@ void VO_SF::updateSceneImageSeq()
 	points->setPose(cam_pose);
 	points->clear();
 	const float brigthing_fact = 0.7f;
+	const unsigned int size_factor = width/cols;
 	for (unsigned int u=0; u<cols; u++)
 		for (unsigned int v=0; v<rows; v++)
             if (depth_old_ref(v,u) != 0.f)
 			{		
 				const float mult = (bf_segm[labels_ref(v,u)] < 0.333f) ? 0.25f : brigthing_fact;
-				const float red = mult*(im_r_old(v,u)-1.f)+1.f;
-				const float green = mult*(im_g_old(v,u)-1.f)+1.f;
-				const float blue = mult*(im_b_old(v,u)-1.f)+1.f;
+				const float red = mult*(im_r_old(size_factor*v,size_factor*u)-1.f)+1.f;
+				const float green = mult*(im_g_old(size_factor*v,size_factor*u)-1.f)+1.f;
+				const float blue = mult*(im_b_old(size_factor*v,size_factor*u)-1.f)+1.f;
 
 				points->push_back(depth_old_ref(v,u), xx_old_ref(v,u), yy_old_ref(v,u), red, green, blue);			
 			}
@@ -414,7 +417,7 @@ void VO_SF::updateSceneImageSeq()
 
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
-    image.setFromRGBMatrices(olabels_image[0], olabels_image[1], olabels_image[2], true);
+    image.setFromRGBMatrices(labels_image[0], labels_image[1], labels_image[2], true);
     image.flipVertical();
 	image.flipHorizontal();
     vp_labels->setImageView(image);

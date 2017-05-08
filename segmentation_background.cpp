@@ -71,10 +71,10 @@ void VO_SF::segmentBackgroundForeground()
 
 	for (unsigned int l=0; l<NUM_LABELS; l++)
 	{	
-		if (size_kmeans_maxres[l] > 0)
+		if (size_kmeans[l] != 0)
 		{
-			lab_res_c[l] /= size_kmeans_maxres[l];
-			lab_res_d[l] /= size_kmeans_maxres[l];
+			lab_res_c[l] /= size_kmeans[l];
+			lab_res_d[l] /= size_kmeans[l];
 		}
 
 		//Compute the overall residual
@@ -94,7 +94,7 @@ void VO_SF::optimizeSegmentation(Matrix<float, NUM_LABELS, 1> &r)
 	//Set thresholds according to the residuals obtained
 	vector<float> res_sorted;
 	for (unsigned int l=0; l<NUM_LABELS; l++)
-		if (size_kmeans_maxres[l] > 0)
+		if (size_kmeans[l] != 0)
 			res_sorted.push_back(r(l));
 	std::sort(res_sorted.begin(), res_sorted.end());
 	const float median_res = res_sorted.at(res_sorted.size()/2);
@@ -123,7 +123,7 @@ void VO_SF::optimizeSegmentation(Matrix<float, NUM_LABELS, 1> &r)
 	//Compute the depth range
 	float min_depth = 10.f, max_depth = 0.f;
 	for (unsigned int l=0; l<NUM_LABELS; l++)
-		if (size_kmeans_maxres[l] != 0)
+		if (size_kmeans[l] != 0)
 		{
 			min_depth = min(min_depth, kmeans(0,l));
 			max_depth = max(max_depth, kmeans(0,l));
@@ -263,8 +263,8 @@ void VO_SF::computeBackgTemporalRegValues()
 	
 	
 	for (unsigned int l=0; l<NUM_LABELS; l++)
-		if (size_kmeans_maxres[l] != 0)
-			bf_segm_warped[l] /= size_kmeans_maxres[l];
+		if (size_kmeans[l] != 0)
+			bf_segm_warped[l] /= size_kmeans[l];
 }
 
 

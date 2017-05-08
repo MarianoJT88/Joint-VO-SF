@@ -38,7 +38,7 @@ int main()
 	Datasets dataset(res_factor);
 
 	//Flags and parameters
-	const bool save_results = true;
+	const bool save_results = false;
 
 	//Set dir of the Rawlog file
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_static/rgbd_dataset_freiburg3_walking_static.rawlog";
@@ -85,7 +85,7 @@ int main()
 			cf.im_b_old.swap(cf.im_b);
             dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
             cf.mainIteration(true);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
             anything_new = 1;
@@ -109,7 +109,7 @@ int main()
 			cf.im_b_old.swap(cf.im_b);
 			dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
             cf.mainIteration(true);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
             anything_new = 1;

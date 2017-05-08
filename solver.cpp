@@ -9,16 +9,19 @@ using namespace mrpt::utils;
 using namespace std;
 using namespace Eigen;
 
-
-VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(640*480), ws_background(640*480)  //I don't know why it crashes if I set the right resolution here **************************
+//A strange size for "ws..." due to the fact that some pixels are used twice for odometry and scene flow (hence the 3/2 safety factor)
+VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(3*640*480/(2*res_factor*res_factor)), ws_background(3*640*480/(2*res_factor*res_factor))  
 {
-    rows = 240;
+    //Resolutions and levels
+	rows = 240;
     cols = 320;
 	fovh = M_PI*62.5/180.0;
     fovv = M_PI*48.5/180.0;
     width = 640/res_factor;
     height = 480/res_factor;
 	ctf_levels = log2(cols/40) + 2;
+
+	//Solver
 	k_photometric_res = 0.15f;
 	irls_chi2_decrement_threshold = 0.98f;
     irls_var_delta_threshold = 1e-6f;
@@ -26,21 +29,22 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(640*480), ws_background(64
 	max_iter_per_level = 3;
 	use_backg_temp_reg = false;
 
-	//Velocities and poses
+	//CamPose
 	cam_pose.setFromValues(0,0,0,0,0,0);
 	cam_oldpose = cam_pose;
 
 	//Resize matrices which are not in a "pyramid"
 	depth_wf.setSize(height,width);
 	intensity_wf.setSize(height,width);
+	im_r.resize(height,width); im_g.resize(height,width); im_b.resize(height,width);
+	im_r_old.resize(height,width); im_g_old.resize(height,width); im_b_old.resize(height,width);
+
     motionfield[0].setSize(rows,cols);
     motionfield[1].setSize(rows,cols);
     motionfield[2].setSize(rows,cols);
 	dct.resize(rows,cols); ddt.resize(rows,cols);
     dcu.resize(rows,cols); ddu.resize(rows,cols);
     dcv.resize(rows,cols); ddv.resize(rows,cols);
-	im_r.resize(rows,cols); im_g.resize(rows,cols); im_b.resize(rows,cols);
-	im_r_old.resize(rows,cols); im_g_old.resize(rows,cols); im_b_old.resize(rows,cols);
     Null.resize(rows,cols);
     weights_c.setSize(rows,cols);
     weights_d.setSize(rows,cols);
@@ -91,24 +95,24 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(640*480), ws_background(64
     //=========================================================
 	bf_segm_image_warped.setSize(rows,cols);
 	bf_segm_image_warped.fill(0.f);
-	label_in_backg.fill(false);
-	label_in_foreg.fill(true);
-	backg_image[0].resize(rows,cols);
-	backg_image[1].resize(rows,cols);
-	backg_image[2].resize(rows,cols);
+	label_in_backg.fill(true);
+	label_in_foreg.fill(false);
 
     for (unsigned int c=0; c<3; c++)
-        olabels_image[c].resize(rows,cols);
+	{
+		backg_image[c].resize(rows,cols);
+        labels_image[c].resize(rows,cols);
+	}
 
-    labels_opt.resize(pyr_levels);
+    label_funct.resize(pyr_levels);
     for (unsigned int i = 0; i<pyr_levels; i++)
     {
         const unsigned int s = pow(2.f,int(i));
         cols_i = width/s; rows_i = height/s;
         if (cols_i <= cols)
         {
-            labels_opt[i].resize(NUM_LABELS+1, rows_i*cols_i);
-            labels_opt[i].assign(0.f);
+            label_funct[i].resize(NUM_LABELS+1, rows_i*cols_i);
+            label_funct[i].assign(0.f);
         }
     }
 }
@@ -229,7 +233,7 @@ void VO_SF::saveFlowAndSegmToFile(string files_dir)
             rmz.at<float>(v,u) = motionfield[0](rows-1-v,u);
 			segm.at<unsigned char>(v,u) = int(255.f*min(1.f, bf_segm[labels[image_level](rows-1-v,u)]));
 			segm_col.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f*backg_image[2](rows-1-v,u), 255.f*backg_image[1](rows-1-v,u), 255.f*backg_image[0](rows-1-v,u));
-			kmeans.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f* olabels_image[2](rows-1-v,u), 255.f*olabels_image[1](rows-1-v,u), 255.f*olabels_image[0](rows-1-v,u));
+			kmeans.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f* labels_image[2](rows-1-v,u), 255.f*labels_image[1](rows-1-v,u), 255.f*labels_image[0](rows-1-v,u));
         }
 
     SFlow << "SFx" << rmx;
@@ -706,14 +710,15 @@ void VO_SF::solveMotionForeground()
     const float in_threshold = 0.2f;
     Matrix <float,6,1> Var;
     vector<pair<int,int> > &indices = ws_foreground.indices;
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
 
     for (unsigned int l=0; l<NUM_LABELS; l++)
     {
         if (!label_in_foreg[l])
 			continue;
 		
-        indices.clear();
+        //Create the indices for the elements in this cluster
+		indices.clear();
 
         for (unsigned int u = 1; u < cols_i-1; u++)
             for (unsigned int v = 1; v < rows_i-1; v++)
@@ -734,7 +739,7 @@ void VO_SF::solveMotionBackground()
     Vector6f Var;
     vector<pair<int,int> > &indices = ws_background.indices;
     indices.clear();
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
 
 	//Create the indices for the elements in the background
     for (unsigned int l=0; l<NUM_LABELS; l++)
@@ -842,7 +847,7 @@ void VO_SF::warpImages(cv::Rect region)
 	const MatrixXf &depth_old_ref = depth_old[image_level];
 	const MatrixXf &xx_old_ref = xx_old[image_level];
 	const MatrixXf &yy_old_ref = yy_old[image_level];
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
 
 	//Initialize
 	depth_warped_ref.block(y, x, h, w).assign(0.f);
@@ -1011,7 +1016,7 @@ void VO_SF::mainIteration(bool create_image_pyr)
     //Create labels
     //----------------------------------------------------------------------------------
     //Kmeans
-	kMeans3DCoordLowRes();
+	kMeans3DCoord();
 
 	//Create the pyramid for the labels
 	createLabelsPyramidUsingKMeans();
@@ -1052,7 +1057,6 @@ void VO_SF::mainIteration(bool create_image_pyr)
 			else 
                 warpImagesOld(); // forward warping, more precise
 
-
 			//2. Compute inter coords (better linearization of the range and optical flow constraints)
 			computeCoordsParallel();
 
@@ -1088,7 +1092,6 @@ void VO_SF::mainIteration(bool create_image_pyr)
         unsigned int s = pow(2.f,int(ctf_levels-(i+1)));
         cols_i = cols/s; rows_i = rows/s;
         image_level = ctf_levels - i + round(log2(width/cols)) - 1;
-
 
 		//1. Perform warping
 		//Info: The accuracy of the odometry is slightly better using the other warping but I cannot use in general because
@@ -1147,7 +1150,7 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 	const MatrixXf &depth_old_ref = depth_old[repr_level];
 	const MatrixXf &xx_old_ref = xx_old[repr_level];
 	const MatrixXf &yy_old_ref = yy_old[repr_level];
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_opt_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> &label_funct_ref = label_funct[image_level];
 	const MatrixXi &labels_ref = labels[image_level];
 
 	Matrix4f trans; 
@@ -1162,8 +1165,8 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 				//Interpolate between the transformations
                 trans.fill(0.f);
                 for (unsigned int l=0; l<NUM_LABELS; l++)
-                    if (labels_opt_ref(l,pixel_label) != 0.f)
-                        trans += labels_opt_ref(l,pixel_label)*mytrans[l];
+                    if (label_funct_ref(l,pixel_label) != 0.f)
+                        trans += label_funct_ref(l,pixel_label)*mytrans[l];
 
                 //Transform point to the warped reference frame
                 motionfield[0](v,u) = trans(0,0)*z + trans(0,1)*xx_old_ref(v,u) + trans(0,2)*yy_old_ref(v,u) + trans(0,3) - z;

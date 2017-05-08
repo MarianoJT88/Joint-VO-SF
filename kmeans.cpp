@@ -103,7 +103,7 @@ void VO_SF::initializeKMeans()
 	}
 }
 
-void VO_SF::kMeans3DCoordLowRes()
+void VO_SF::kMeans3DCoord()
 {
 	const unsigned int max_level = round(log2(width/cols));
     const unsigned int lower_level = max_level+1;
@@ -262,7 +262,7 @@ void VO_SF::kMeans3DCoordLowRes()
 
 	//Save the size of each segment (at max resolution)
 	for (unsigned int l=0; l<NUM_LABELS; l++)
-		size_kmeans_maxres[l] = count[l];
+		size_kmeans[l] = count[l];
 }
 
 void VO_SF::computeRegionConnectivity()
@@ -318,10 +318,10 @@ void VO_SF::smoothRegions(unsigned int image_level)
 	const MatrixXf &xx_ref = xx_old[image_level];
 	const MatrixXf &yy_ref = yy_old[image_level];
 	const MatrixXi &labels_ref = labels[image_level];
-	Matrix<float, NUM_LABELS+1, Dynamic> &labels_opt_ref = labels_opt[image_level];
+	Matrix<float, NUM_LABELS+1, Dynamic> &label_funct_ref = label_funct[image_level];
 
     //Set all labels to zero initially
-    labels_opt_ref.assign(0.f);
+    label_funct_ref.assign(0.f);
 
 
 	//Smooth
@@ -354,10 +354,10 @@ void VO_SF::smoothRegions(unsigned int image_level)
 					}
 
 				const float sum_weights_inv = 1.f/weights.sumAll();
-				labels_opt_ref.col(pixel_ind) = weights*sum_weights_inv;
+				label_funct_ref.col(pixel_ind) = weights*sum_weights_inv;
 			}
 			else
-				labels_opt_ref(NUM_LABELS, pixel_ind) = 1.f;
+				label_funct_ref(NUM_LABELS, pixel_ind) = 1.f;
 		}
 }
 
@@ -416,12 +416,12 @@ void VO_SF::createLabelsPyramidUsingKMeans()
 }
 
 
-void VO_SF::createOptLabelImage()
+void VO_SF::createImagesOfSegmentations()
 {
     image_level = round(log2(width/cols));
 
 	//Refs
-	const Matrix<float, NUM_LABELS+1, Dynamic> labels_opt_ref = labels_opt[image_level];
+	const Matrix<float, NUM_LABELS+1, Dynamic> label_funct_ref = label_funct[image_level];
 	const MatrixXf &depth_old_ref = depth_old[image_level];
 
     //Associate colors to labels
@@ -435,7 +435,7 @@ void VO_SF::createOptLabelImage()
     //Compute the color for every pixel according to the estimated labeling
 	for (unsigned int c=0; c<3; c++)
 	{
-		olabels_image[c].assign(0.f);
+		labels_image[c].fill(0.f);
 		backg_image[c].fill(0.f);
 	}
 
@@ -445,32 +445,17 @@ void VO_SF::createOptLabelImage()
 			{
                 for (unsigned int l=0; l<NUM_LABELS; l++)
                 {
-                    const float lab = labels_opt_ref(l, v+u*rows);
-                    olabels_image[0](v,u) += lab*r[l];
-                    olabels_image[1](v,u) += lab*g[l];
-                    olabels_image[2](v,u) += lab*b[l];
+                    const float lab = label_funct_ref(l, v+u*rows);
+                    labels_image[0](v,u) += lab*r[l];
+                    labels_image[1](v,u) += lab*g[l];
+                    labels_image[2](v,u) += lab*b[l];
 
-					//if (label_in_backg[l]&&!label_in_foreg[l])
-					//	backg_image(v,u) += 1.f*lab;
-					//else if (label_in_backg[l])
-					//	backg_image(v,u) += 0.66f*lab;
-					//else if (label_in_foreg[l])
-					//	backg_image(v,u) += 0.33f*lab;
-					
-					//backg_image[0](v,u) += min(1.f, bf_segm[l])*lab;
-					//backg_image[1](v,u) += min(1.f, bf_segm[l])*lab;
-					//backg_image[2](v,u) += min(1.f, bf_segm[l])*lab;
-
-					 float aux_var;
+					float aux_var;
 					if (bf_segm[l] < 0.333) 		aux_var = 0.f;
 					else if (bf_segm[l] > 0.667)	aux_var = 1.f;
 					else							aux_var = min(1.f, 3.f*(bf_segm[l] - 0.333f));
 					backg_image[0](v,u) += aux_var*lab;
 					backg_image[2](v,u) += (1.f - aux_var)*lab;
-
-
-					//backg_image[0](v,u) += min(1.f, bf_segm[l])*lab;
-					//backg_image[2](v,u) += (1.f - min(1.f, bf_segm[l]))*lab;
                 }
 			}
 }

@@ -64,7 +64,7 @@ void Datasets::openRawlog()
 	last_gt_row = 0;
 }
 
-void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g, Eigen::MatrixXf &im_b)
+void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &intensity_wf, Eigen::MatrixXf &im_r, Eigen::MatrixXf &im_g, Eigen::MatrixXf &im_b)
 {
 	if (dataset_finished)
 	{
@@ -91,7 +91,7 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 	obs3D->load();
 	const MatrixXf range = obs3D->rangeImage;
 	const CImage int_image =  obs3D->intensityImage;
-	CMatrixFloat color; int_image.getAsMatrix(color);
+	CMatrixFloat intensity; int_image.getAsMatrix(intensity);
 	CMatrixFloat r,g,b; int_image.getAsRGBMatrices(r, g, b);
 	const unsigned int height = range.getRowCount();
 	const unsigned int width = range.getColCount();
@@ -100,13 +100,15 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 	for (unsigned int j = 0; j<cols; j++)
 		for (unsigned int i = 0; i<rows; i++)
 		{
-			color_wf(i,j) = color(height-downsample*i-1, width-downsample*j-1);
-			im_r(i,j) = b(height-downsample*i-1, width-downsample*j-1);
-			im_g(i,j) = g(height-downsample*i-1, width-downsample*j-1);
-			im_b(i,j) = r(height-downsample*i-1, width-downsample*j-1);
+			intensity_wf(i,j) = intensity(height-downsample*i-1, width-downsample*j-1);
 			const float z = range(height-downsample*i-1, width-downsample*j-1);
 			if (z < max_distance)	depth_wf(i,j) = z;
 			else					depth_wf(i,j) = 0.f;
+
+			//Color image, just for the visualization
+			im_r(i,j) = b(height-downsample*i-1, width-downsample*j-1);
+			im_g(i,j) = g(height-downsample*i-1, width-downsample*j-1);
+			im_b(i,j) = r(height-downsample*i-1, width-downsample*j-1);
 		}
 
 

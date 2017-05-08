@@ -61,13 +61,12 @@ typedef dvo::NormalEquation<float, 6, 2> NormalEquation;
 struct NormalEquationAndChi2
 {
     NormalEquation nes;
-    float chi2, mean;
+    float chi2;
 
     NormalEquationAndChi2()
     {
         nes.setZero();
         chi2 = 0.f;
-        mean = 0.f;
     }
 
     struct Reduce
@@ -76,7 +75,6 @@ struct NormalEquationAndChi2
         {
             NormalEquationAndChi2 r;
             r.chi2 = a.chi2 + b.chi2;
-            r.mean = a.mean + b.mean;
             r.nes.add(a.nes);
             r.nes.add(b.nes);
 
@@ -89,10 +87,11 @@ struct IrlsContext
 {
     float *A, *B;
     float k_Cauchy, Cauchy_factor;
-    Vector6f Var;
-	unsigned int num_pixels;
-	Eigen::VectorXf residuals;
 	float sum_residuals;
+	unsigned int num_pixels;
+    Vector6f Var;
+	Eigen::VectorXf residuals;
+
 
 	inline void computeNewResiduals()
 	{
@@ -106,8 +105,6 @@ struct IrlsContext
 			const JacobianT::MapType J(A + i*JacobianElements); 
 			const ResidualT::MapType r(B + i*ResidualElements);
 			residuals.block<2,1>(2*i,0) = J*Var - r;
-			//residuals(2*i) += J.row(0)*Var;
-			//residuals(2*i+1) += J.row(1)*Var;
 			sum_residuals += abs(residuals(2*i)) + abs(residuals(2*i+1));
 		}
 
@@ -125,20 +122,17 @@ struct IrlsElementFn
 
     inline void update(NormalEquationAndChi2 &nes_and_chi2, Eigen::Matrix2f &info, size_t i) const
     {
-        //JacobianT::MapType J(ctx.A + i*JacobianElements);
-        //ResidualT::MapType r(ctx.B + i*ResidualElements);
-		//const Vector2f res_local(ctx.residuals(2*i), ctx.residuals(2*i+1));
 		const float res_c = ctx.residuals(2*i);
 		const float res_d = ctx.residuals(2*i+1);
 
-		//Color
-        const float res_weight_color = 1.f/(1.f + ctx.k_Cauchy*res_c*res_c);
+		//Intensity
+        const float res_weight_intensity = 1.f/(1.f + ctx.k_Cauchy*res_c*res_c);
 
         //Depth
         const float res_weight_depth = 1.f/(1.f + ctx.k_Cauchy*res_d*res_d);
 
 
-        info(0,0) = res_weight_color;
+        info(0,0) = res_weight_intensity;
         info(1,1) = res_weight_depth;
 
         //nes_and_chi2.nes.update(J.data(), r.data(), info.data());
@@ -146,7 +140,7 @@ struct IrlsElementFn
 		const float *B_elem = ctx.B + i*ResidualElements;
 		nes_and_chi2.nes.update(A_elem, B_elem, info.data());
 
-        nes_and_chi2.chi2 += res_c*res_c*res_weight_color + res_d*res_d*res_weight_depth;
+        nes_and_chi2.chi2 += res_c*res_c*res_weight_intensity + res_d*res_d*res_weight_depth;
     }
 
     NormalEquationAndChi2 operator()(const Range& range, const NormalEquationAndChi2 &initial) const
@@ -196,7 +190,7 @@ struct JacobianElementFn
             const float x = xx_inter_(v,u);
             const float y = yy_inter_(v,u);
 
-            //                                          Color
+            //                                          Intensity
             //------------------------------------------------------------------------------------------------
             const float dycomp_c = self.dcu(v,u)*f_inv*inv_d;
             const float dzcomp_c = self.dcv(v,u)*f_inv*inv_d;
@@ -270,7 +264,7 @@ struct JacobianElementForRobustOdometryFn
 
             const float w_dinobj = std::max(0.f, 1.f - self.bf_segm_warped[labels_ref(v,u)]);
 
-            //                                          Color
+            //                                          Intensity
             //------------------------------------------------------------------------------------------------
             const float dycomp_c = self.dcu(v,u)*f_inv*inv_d;
             const float dzcomp_c = self.dcv(v,u)*f_inv*inv_d;

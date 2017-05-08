@@ -75,7 +75,7 @@ int main()
 			cf.im_b_old.swap(cf.im_b);
 			stop = cf.loadImageFromSequence(dir, im_count, res_factor);
             cf.mainIteration(true);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
             cf.updateSceneImageSeq();
             break;
 
@@ -98,7 +98,7 @@ int main()
 			cf.im_b_old.swap(cf.im_b);
 			stop = cf.loadImageFromSequence(dir, im_count, res_factor);
             cf.mainIteration(true);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
 			cf.updateSceneImageSeq();
 		}
 	}

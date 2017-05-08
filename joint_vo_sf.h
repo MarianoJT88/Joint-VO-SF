@@ -93,7 +93,6 @@ public:
 	mrpt::poses::CPose3D cam_pose, cam_oldpose;
 
 	//Parameters
-	float k_photometric_res;
     float fovh, fovv;
     unsigned int rows, cols;
     unsigned int rows_i, cols_i;
@@ -126,6 +125,7 @@ public:
 	//--------------------------------------------------------------
 	unsigned int iter_irls;
 	unsigned int max_iter_per_level;
+	float k_photometric_res;
 	float irls_chi2_decrement_threshold, irls_var_delta_threshold;
 	SolveForMotionWorkspace ws_foreground, ws_background;
 
@@ -161,17 +161,17 @@ public:
 
     //					Geometric clustering
     //--------------------------------------------------------------   
-    Eigen::MatrixXf olabels_image[3], backg_image[3];
+    Eigen::MatrixXf labels_image[3], backg_image[3];
 	std::vector<Eigen::MatrixXi> labels;
-    std::vector<Eigen::Matrix<float, NUM_LABELS+1, Eigen::Dynamic> > labels_opt;
+    std::vector<Eigen::Matrix<float, NUM_LABELS+1, Eigen::Dynamic> > label_funct;
 	Eigen::Matrix<float, 3, NUM_LABELS> kmeans;
-	Eigen::Matrix<int, NUM_LABELS, 1> size_kmeans_maxres;
+	Eigen::Matrix<int, NUM_LABELS, 1> size_kmeans;
 	bool connectivity[NUM_LABELS][NUM_LABELS];
 
 	void createLabelsPyramidUsingKMeans();
 	void initializeKMeans();
-	void kMeans3DCoordLowRes();
-    void createOptLabelImage();
+	void kMeans3DCoord();
+    void createImagesOfSegmentations();
     void computeRegionConnectivity();
     void smoothRegions(unsigned int image_level);
 

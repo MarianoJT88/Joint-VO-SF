@@ -62,7 +62,7 @@ int main()
 
 	//Run the algorithm
 	cf.mainIteration(false);
-    cf.createOptLabelImage();
+    cf.createImagesOfSegmentations();
 
 	//Update the 3D scene
 	cf.updateSceneCamera(false);

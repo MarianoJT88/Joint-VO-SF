@@ -31,7 +31,7 @@
 
 int main()
 {	
-    unsigned int res_factor = 1;
+    unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
 	RGBD_Camera camera(res_factor);
 
@@ -68,8 +68,8 @@ int main()
 		case  'n':
             camera.loadFrame(cf.depth_wf, cf.intensity_wf);
 			cf.createImagePyramid();
-			cf.kMeans3DCoordLowRes();
-            cf.createOptLabelImage();
+			cf.kMeans3DCoord();
+            cf.createImagesOfSegmentations();
 
             anything_new = true;
             clean_sf = true;
@@ -78,7 +78,7 @@ int main()
         //Compute the solution
         case 'a':
             cf.mainIteration(false);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
 
             anything_new = true;
             break;
@@ -104,7 +104,7 @@ int main()
         {
             camera.loadFrame(cf.depth_wf, cf.intensity_wf);
             cf.mainIteration(true);
-            cf.createOptLabelImage();
+            cf.createImagesOfSegmentations();
             anything_new = 1;
         }
 	
