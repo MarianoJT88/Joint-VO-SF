@@ -22,23 +22,27 @@
 *********************************************************************************/
 
 #include <stdio.h>
-#include <string.h>
 #include <joint_vo_sf.h>
 #include <datasets.h>
 
 
-// ------------------------------------------------------
-//						MAIN
-// ------------------------------------------------------
+// -------------------------------------------------------------------------------
+//								Instructions:
+// You need to click on the window of the 3D Scene to be able to interact with it.
+// 'n' - Load new frame and solve
+// 's' - Turn on/off continuous estimation
+// 'e' - Finish/exit
+//
+// Set the flag "save_results" to true if you want to save the estimated trajectory
+// -------------------------------------------------------------------------------
 
 int main()
 {	
+	const bool save_results = true;
     unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
 	Datasets dataset(res_factor);
 
-	//Flags and parameters
-	const bool save_results = false;
 
 	//Set dir of the Rawlog file
 	//dataset.filename = "D:/TUM datasets/rawlog_rgbd_dataset_freiburg3_walking_static/rgbd_dataset_freiburg3_walking_static.rawlog";
@@ -55,7 +59,7 @@ int main()
 	//Create the 3D Scene
 	cf.initializeSceneDatasets();
 
-	//Initiallize
+	//Initialize
 	if (save_results)
 		dataset.CreateResultsFile();
     dataset.openRawlog();
@@ -78,13 +82,10 @@ int main()
 
 		switch (pushed_key) {
 			
-        //Capture a new frame and solve
+        //Load new frame and solve
 		case  'n':
-			cf.im_r_old.swap(cf.im_r);
-			cf.im_g_old.swap(cf.im_g);
-			cf.im_b_old.swap(cf.im_b);
             dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
-            cf.mainIteration(true);
+            cf.run_VO_SF(true);
             cf.createImagesOfSegmentations();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);
@@ -97,18 +98,15 @@ int main()
             break;
 		
 		//Close the program
-		case 'p':
+		case 'e':
 			stop = 1;
 			break;
 		}
 
         if (continuous_exec)
         {
-            cf.im_r_old.swap(cf.im_r);
-			cf.im_g_old.swap(cf.im_g);
-			cf.im_b_old.swap(cf.im_b);
 			dataset.loadFrameAndPoseFromDataset(cf.depth_wf, cf.intensity_wf, cf.im_r, cf.im_g, cf.im_b);
-            cf.mainIteration(true);
+            cf.run_VO_SF(true);
             cf.createImagesOfSegmentations();
 			if (save_results)
 				dataset.writeTrajectoryFile(cf.cam_pose, cf.ddt);

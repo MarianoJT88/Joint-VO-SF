@@ -1,12 +1,31 @@
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
-#include "datasets.h"
+#include <datasets.h>
 
 using namespace mrpt;
 using namespace mrpt::obs;
-using namespace mrpt::utils;
-using namespace mrpt::math;
 using namespace std;
-using namespace Eigen;
 
 
 Datasets::Datasets(unsigned int res_factor)
@@ -27,7 +46,7 @@ void Datasets::openRawlog()
 
 	// Set external images directory:
 	const string imgsPath = CRawlog::detectImagesDirectory(filename);
-	CImage::IMAGES_PATH_BASE = imgsPath;
+	utils::CImage::IMAGES_PATH_BASE = imgsPath;
 
 
 	//					Load ground-truth
@@ -48,7 +67,7 @@ void Datasets::openRawlog()
     f_gt.clear();
 	f_gt.seekg(0, ios::beg);
 
-
+	//Store the gt data in a matrix
 	char aux[100];
 	f_gt.getline(aux, 100);
 	f_gt.getline(aux, 100);
@@ -72,7 +91,7 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 		return;
 	}
 	
-	//Images
+	//Read images
 	//-------------------------------------------------------
 	CObservationPtr alfa = dataset.getAsObservation(rawlog_count);
 
@@ -89,10 +108,11 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 
 	CObservation3DRangeScanPtr obs3D = CObservation3DRangeScanPtr(alfa);
 	obs3D->load();
-	const MatrixXf range = obs3D->rangeImage;
-	const CImage int_image =  obs3D->intensityImage;
-	CMatrixFloat intensity; int_image.getAsMatrix(intensity);
-	CMatrixFloat r,g,b; int_image.getAsRGBMatrices(r, g, b);
+	const Eigen::MatrixXf range = obs3D->rangeImage;
+	const utils::CImage int_image =  obs3D->intensityImage;
+	math::CMatrixFloat intensity; int_image.getAsMatrix(intensity);
+	math::CMatrixFloat r,g,b; int_image.getAsRGBMatrices(r, g, b);
+
 	const unsigned int height = range.getRowCount();
 	const unsigned int width = range.getColCount();
 	const unsigned int cols = width/downsample, rows = height/downsample;
@@ -142,7 +162,7 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 	qx = gt_matrix(last_gt_row,4); qy = gt_matrix(last_gt_row,5); qz = gt_matrix(last_gt_row,6);
 	w = gt_matrix(last_gt_row,7);
 
-	CMatrixDouble33 mat;
+	math::CMatrixDouble33 mat;
 	mat(0,0) = 1 - 2*qy*qy - 2*qz*qz;
 	mat(0,1) = 2*(qx*qy - w*qz);
 	mat(0,2) = 2*(qx*qz + w*qy);
@@ -184,7 +204,7 @@ void Datasets::CreateResultsFile()
 	printf(" Saving results to file: %s \n", aux);
 }
 
-void Datasets::writeTrajectoryFile(poses::CPose3D &cam_pose, MatrixXf &ddt)
+void Datasets::writeTrajectoryFile(poses::CPose3D &cam_pose, Eigen::MatrixXf &ddt)
 {	
 	//Don't take into account those iterations with consecutive equal depth images
 	if (abs(ddt.sumAll()) > 0)

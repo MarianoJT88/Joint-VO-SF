@@ -1,8 +1,28 @@
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
+
 #include <camera.h>
 #include <PS1080.h>
-
-using namespace std;
-using namespace Eigen;
 
 
 RGBD_Camera::RGBD_Camera(unsigned int res_factor)
@@ -15,9 +35,7 @@ RGBD_Camera::RGBD_Camera(unsigned int res_factor)
 bool RGBD_Camera::openCamera()
 {
     rc = openni::STATUS_OK;
-
     const char* deviceURI = openni::ANY_DEVICE;
-
     rc = openni::OpenNI::initialize();
 
     printf("Opening camera...\n %s\n", openni::OpenNI::getExtendedError());
@@ -91,7 +109,7 @@ void RGBD_Camera::closeCamera()
     openni::OpenNI::shutdown();
 }
 
-void RGBD_Camera::loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf)
+void RGBD_Camera::loadFrame(Eigen::MatrixXf &depth_wf, Eigen::MatrixXf &color_wf)
 {
     const float norm_factor = 1.f/255.f;
     openni::VideoFrameRef framergb, framed;
@@ -102,7 +120,7 @@ void RGBD_Camera::loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf)
     const int width = framergb.getWidth();
 
     if ((framed.getWidth() != framergb.getWidth()) || (framed.getHeight() != framergb.getHeight()))
-        cout << endl << "The RGB and the depth frames don't have the same size.";
+        printf("\n The RGB and the depth frames don't have the same size.");
 
     else
     {
@@ -129,7 +147,7 @@ void RGBD_Camera::loadFrame(MatrixXf &depth_wf, MatrixXf &color_wf)
 
 void RGBD_Camera::disableAutoExposureAndWhiteBalance()
 {
-    MatrixXf aux_depth, aux_color;
+    Eigen::MatrixXf aux_depth, aux_color;
 	if (cam_mode == 1)	{aux_depth.resize(480,640); aux_color.resize(480,640);}
 	else				{aux_depth.resize(240,320); aux_color.resize(240,320);}
 	

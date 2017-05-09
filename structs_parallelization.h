@@ -24,9 +24,9 @@
 #ifndef structs_parallelization_H
 #define structs_parallelization_H
 
-#include "joint_vo_sf.h"
-#include "dvo/normal_equation.hpp"
-#include "dvo/opencv_ext.hpp"
+#include <joint_vo_sf.h>
+#include <dvo/normal_equation.hpp>
+#include <dvo/opencv_ext.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_reduce.h>
@@ -125,21 +125,19 @@ struct IrlsElementFn
 		const float res_c = ctx.residuals(2*i);
 		const float res_d = ctx.residuals(2*i+1);
 
-		//Intensity
+		//Intensity and depth weights
         const float res_weight_intensity = 1.f/(1.f + ctx.k_Cauchy*res_c*res_c);
-
-        //Depth
         const float res_weight_depth = 1.f/(1.f + ctx.k_Cauchy*res_d*res_d);
-
 
         info(0,0) = res_weight_intensity;
         info(1,1) = res_weight_depth;
 
-        //nes_and_chi2.nes.update(J.data(), r.data(), info.data());
+		//Update matrices
 		const float *A_elem = ctx.A + i*JacobianElements;
 		const float *B_elem = ctx.B + i*ResidualElements;
 		nes_and_chi2.nes.update(A_elem, B_elem, info.data());
 
+		//Update chi2
         nes_and_chi2.chi2 += res_c*res_c*res_weight_intensity + res_d*res_d*res_weight_depth;
     }
 
@@ -262,7 +260,7 @@ struct JacobianElementForRobustOdometryFn
             const float x = xx_inter_(v,u);
             const float y = yy_inter_(v,u);
 
-            const float w_dinobj = std::max(0.f, 1.f - self.bf_segm_warped[labels_ref(v,u)]);
+            const float w_dinobj = std::max(0.f, 1.f - self.b_segm_warped[labels_ref(v,u)]);
 
             //                                          Intensity
             //------------------------------------------------------------------------------------------------

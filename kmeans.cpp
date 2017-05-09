@@ -1,8 +1,29 @@
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
-#include "joint_vo_sf.h"
+#include <joint_vo_sf.h>
 
 using namespace mrpt;
-using namespace mrpt::poses;
 using namespace mrpt::utils;
 using namespace std;
 using namespace Eigen;
@@ -21,8 +42,8 @@ struct IndexAndDistance
 
 void VO_SF::initializeKMeans()
 {
-	//Initialization
-	rows_i = rows/2; cols_i = cols/2; //KMeans are computed at one resolution lower than the max
+	//Initialization: kmeans are computed at one resolution lower than the max (to speed the process up)
+	rows_i = rows/2; cols_i = cols/2; 
 	image_level = round(log2(width/cols_i));
 	const MatrixXf &depth_ref = depth_old[image_level];
 	const MatrixXf &xx_ref = xx_old[image_level];
@@ -62,17 +83,13 @@ void VO_SF::initializeKMeans()
 			}
 
 	//Compute the "center of mass" for each region
-	std::vector<float> depth_sorted[NUM_LABELS]; //, x_sorted[NUM_LABELS], y_sorted[NUM_LABELS];
+	std::vector<float> depth_sorted[NUM_LABELS];
 
 	for (unsigned int u=0; u<cols_i; u++)
 		for (unsigned int v=0; v<rows_i; v++)
 			if (depth_ref(v,u) != 0.f)
-				{
 					depth_sorted[labels_ref(v,u)].push_back(depth_ref(v,u));
-					//x_sorted[labels_ref(v,u)].push_back(xx_ref(v,u));
-					//y_sorted[labels_ref(v,u)].push_back(yy_ref(v,u));
-						
-				}
+
 
 	//Compute the first KMeans values (using median to avoid getting a floating point between two regions)
 	const float inv_f_i = 2.f*tan(0.5f*fovh)/float(cols_i);
@@ -86,12 +103,8 @@ void VO_SF::initializeKMeans()
 		if (size_label > 0)
 		{
 			std::nth_element(depth_sorted[l].begin(), depth_sorted[l].begin() + med_pos, depth_sorted[l].end());
-			//std::nth_element(x_sorted[l].begin(), x_sorted[l].begin() + med_pos, x_sorted[l].end());
-			//std::nth_element(y_sorted[l].begin(), y_sorted[l].begin() + med_pos, y_sorted[l].end());
 					
 			kmeans(0,l) = depth_sorted[l].at(med_pos);
-			//x_kmeans[l] = x_sorted[l].at(med_pos);
-			//y_kmeans[l] = y_sorted[l].at(med_pos);
 			kmeans(1,l) = (u_label[l]-disp_u_i)*kmeans(0,l)*inv_f_i;
 			kmeans(2,l) = (v_label[l]-disp_v_i)*kmeans(0,l)*inv_f_i;
 		}
@@ -105,6 +118,7 @@ void VO_SF::initializeKMeans()
 
 void VO_SF::kMeans3DCoord()
 {
+	//Kmeans are computed at one resolution lower than the max (to speed the process up)
 	const unsigned int max_level = round(log2(width/cols));
     const unsigned int lower_level = max_level+1;
 	const unsigned int iter_kmeans = 10;
@@ -121,13 +135,12 @@ void VO_SF::kMeans3DCoord()
 
     //                                      Iterate 
     //=======================================================================================
-	const float max_depth_dist = 1.f;
     vector<vector<IndexAndDistance> > cluster_distances(NUM_LABELS, vector<IndexAndDistance>(NUM_LABELS));
 
     MatrixXf centers_a(3,NUM_LABELS), centers_b(3,NUM_LABELS);
 	int count[NUM_LABELS];
 
-	//Fill centers_a (I need to do it in this way to get maximum speed...)
+	//Fill centers_a (I need to do it in this way to get maximum speed, I don't know why...)
 	//centers_a.swap(kmeans);
 	for (unsigned int c=0; c<NUM_LABELS; c++)
 		for (unsigned int r=0; r<3; r++)
@@ -157,20 +170,19 @@ void VO_SF::kMeans3DCoord()
             for (unsigned int v=0; v<rows_i; v++)
                 if (depth_ref(v,u) != 0.f)
                 {
-                    const int last_label = labels_lowres(v,u);
+                    //Initialize
+					const int last_label = labels_lowres(v,u);
 					int best_label = last_label;
                     vector<IndexAndDistance> &distances = cluster_distances.at(last_label);
 
                     const Vector3f p(depth_ref(v,u), xx_ref(v,u), yy_ref(v,u));
-
                     const float distance_to_last_label = (centers_a.col(last_label) - p).squaredNorm();
                     float best_distance = distance_to_last_label;
 
-                    for(size_t li = 1; li < distances.size(); ++li)
+                    for (size_t li = 1; li < distances.size(); ++li)
                     {
-                        IndexAndDistance &idx_and_distance = distances.at(li);
-
-                        if(idx_and_distance.distance > 4.f * distance_to_last_label) break;
+                        const IndexAndDistance &idx_and_distance = distances.at(li);
+                        if(idx_and_distance.distance > 4.f*distance_to_last_label) break;
 
                         const float distance_to_label = (centers_a.col(idx_and_distance.idx) - p).squaredNorm();
 
@@ -186,15 +198,12 @@ void VO_SF::kMeans3DCoord()
                     count[best_label] += 1;
                 }
 
-
         for (unsigned int l=0; l<NUM_LABELS; l++)
-        {
-            if (count[l] > 0) centers_b.col(l) /= count[l];
-			else	 		  ;//printf("\n Label %d is empty", l);
-        }
+            if (count[l] > 0)
+				centers_b.col(l) /= count[l];
 
+		//Checking convergence
         const float max_diff = (centers_a - centers_b).lpNorm<Infinity>();
-        //std::cout << max_diff <<  " " << changed_points << std::endl;
         centers_a.swap(centers_b);
 
         if (max_diff < 1e-2f) break;
@@ -215,7 +224,7 @@ void VO_SF::kMeans3DCoord()
 	const MatrixXf &yy_highres = yy_old[max_level];
 	MatrixXi &labels_ref = labels[max_level];
 
-	//Initialize
+	//Initialize labels
 	labels_ref.assign(NUM_LABELS);
 	for(int i = 0; i < NUM_LABELS; ++i)
 		count[i] = 0;
@@ -238,8 +247,8 @@ void VO_SF::kMeans3DCoord()
 
                 for(size_t li = 1; li < distances.size(); ++li)
                 {
-                    IndexAndDistance &idx_and_distance = distances.at(li);
-                    if(idx_and_distance.distance > 4.f * distance_to_last_label) break;
+                    const IndexAndDistance &idx_and_distance = distances.at(li);
+                    if(idx_and_distance.distance > 4.f*distance_to_last_label) break;
 
                     const float distance_to_label = (centers_a.col(idx_and_distance.idx) - p).squaredNorm();
 
@@ -287,7 +296,7 @@ void VO_SF::computeRegionConnectivity()
         for (unsigned int v=0; v<rows-1; v++)					
 			if (depth_old_ref(v,u) != 0.f)
             {
-                //Detect change in the labelling (v+1)
+                //Detect change in the labelling (v+1,u)
                 if ((labels_ref(v,u) != labels_ref(v+1,u))&&(labels_ref(v+1,u) != NUM_LABELS))
                 {
                     const float disty = square(depth_old_ref(v,u) - depth_old_ref(v+1,u)) + square(yy_old_ref(v,u) - yy_old_ref(v+1,u));
@@ -298,8 +307,8 @@ void VO_SF::computeRegionConnectivity()
                     }
                 }
 
-                //Detect change in the labelling (u+1)
-                if (labels_ref(v,u) != labels_ref(v,u+1)&&(labels_ref(v,u+1) != NUM_LABELS))
+                //Detect change in the labelling (v,u+1)
+                if ((labels_ref(v,u) != labels_ref(v,u+1))&&(labels_ref(v,u+1) != NUM_LABELS))
                 {
                     const float distx = square(depth_old_ref(v,u) - depth_old_ref(v,u+1)) + square(xx_old_ref(v,u) - xx_old_ref(v,u+1));
                     if (distx < dist2_threshold)
@@ -320,9 +329,8 @@ void VO_SF::smoothRegions(unsigned int image_level)
 	const MatrixXi &labels_ref = labels[image_level];
 	Matrix<float, NUM_LABELS+1, Dynamic> &label_funct_ref = label_funct[image_level];
 
-    //Set all labels to zero initially
+    //Set all labelling functions to zero initially
     label_funct_ref.assign(0.f);
-
 
 	//Smooth
 	const float k_smooth = 100.f;
@@ -346,7 +354,7 @@ void VO_SF::smoothRegions(unsigned int image_level)
 					if (connectivity[lab][l])
 					{
 						const float dist = (kmeans.col(l) - p).squaredNorm();
-						const float ref_dist = (kmeans.col(lab) - p).squaredNorm();
+						//const float ref_dist = (kmeans.col(lab) - p).squaredNorm();
 						const float exponent = k_smooth*abs(ref_dist - dist);
 
 						if (exponent < 6.f) //Otherwise it is almost zero and doesn't need to be computed
@@ -394,16 +402,16 @@ void VO_SF::createLabelsPyramidUsingKMeans()
 					unsigned int label = 0;
 					const Vector3f p(depth_old_ref(v,u), xx_old_ref(v,u), yy_old_ref(v,u));
 					float min_dist = (kmeans.col(0) - p).squaredNorm();
-					float quad_dist;
+					float dist_here;
 
 					for (unsigned int l=1; l<NUM_LABELS; l++)
 					{
 						if (kmeans_dist(label,l) > 4.f*min_dist) continue;
 
-						else if ((quad_dist = (kmeans.col(l)-p).squaredNorm()) < min_dist)
+						else if ((dist_here = (kmeans.col(l)-p).squaredNorm()) < min_dist)
 						{
 							label = l;
-							min_dist = quad_dist;
+							min_dist = dist_here;
 						}
 					}
 
@@ -415,50 +423,6 @@ void VO_SF::createLabelsPyramidUsingKMeans()
 	}
 }
 
-
-void VO_SF::createImagesOfSegmentations()
-{
-    image_level = round(log2(width/cols));
-
-	//Refs
-	const Matrix<float, NUM_LABELS+1, Dynamic> label_funct_ref = label_funct[image_level];
-	const MatrixXf &depth_old_ref = depth_old[image_level];
-
-    //Associate colors to labels
-    float r[NUM_LABELS], g[NUM_LABELS], b[NUM_LABELS]; //20 max 
-    for (unsigned int l=0; l<NUM_LABELS; l++)
-    {
-        const float indx = float(l)/float(NUM_LABELS-1);
-        mrpt::utils::colormap(mrpt::utils::cmJET, indx, r[l], g[l], b[l]);
-    }
-
-    //Compute the color for every pixel according to the estimated labeling
-	for (unsigned int c=0; c<3; c++)
-	{
-		labels_image[c].fill(0.f);
-		backg_image[c].fill(0.f);
-	}
-
-    for (unsigned int u=0; u<cols; u++)
-        for (unsigned int v=0; v<rows; v++)
-            if (depth_old_ref(v,u) != 0.f)
-			{
-                for (unsigned int l=0; l<NUM_LABELS; l++)
-                {
-                    const float lab = label_funct_ref(l, v+u*rows);
-                    labels_image[0](v,u) += lab*r[l];
-                    labels_image[1](v,u) += lab*g[l];
-                    labels_image[2](v,u) += lab*b[l];
-
-					float aux_var;
-					if (bf_segm[l] < 0.333) 		aux_var = 0.f;
-					else if (bf_segm[l] > 0.667)	aux_var = 1.f;
-					else							aux_var = min(1.f, 3.f*(bf_segm[l] - 0.333f));
-					backg_image[0](v,u) += aux_var*lab;
-					backg_image[2](v,u) += (1.f - aux_var)*lab;
-                }
-			}
-}
 
 
 

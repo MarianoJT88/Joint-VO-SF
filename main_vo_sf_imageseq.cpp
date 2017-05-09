@@ -25,9 +25,13 @@
 #include <joint_vo_sf.h>
 
 
-// ------------------------------------------------------
-//						MAIN
-// ------------------------------------------------------
+// -------------------------------------------------------------------------------
+//								Instructions:
+// You need to click on the window of the 3D Scene to be able to interact with it.
+// 'n' - Load new frame and solve
+// 's' - Turn on/off continuous estimation
+// 'e' - Finish/exit
+// -------------------------------------------------------------------------------
 
 int main()
 {	
@@ -35,19 +39,19 @@ int main()
 	VO_SF cf(res_factor);
 
 
-	//Load images
+	//Load first image
 	unsigned int im_count;
-	const unsigned int decimation = 5; //5
+	const unsigned int decimation = 1; //5
 	//string dir = "D:/My RGBD sequences/Giraff loop/"; im_count = 200;
-	std::string dir = "D:/My RGBD sequences/Giraff sinusoidal/"; im_count = 320; //250
+	//std::string dir = "D:/My RGBD sequences/Giraff sinusoidal/"; im_count = 320; //250
 	//string dir = "D:/My RGBD sequences/Giraff straight/"; im_count = 200;
-	//string dir = "D:/My RGBD sequences/Me sitting 1/"; im_count = 1; 
-	//string dir = "D:/My RGBD sequences/Me sitting 2/"; im_count = 1; 
-	//string dir = "D:/My RGBD sequences/Me standing moving cam 1/"; im_count = 1; //- This is bad
-	//string dir = "D:/My RGBD sequences/Me standing moving cam 2/"; im_count = 1; 
-	//string dir = "D:/My RGBD sequences/Me opening door cam slow 1/"; im_count = 1; 
-	//string dir = "D:/My RGBD sequences/Me cleaning whiteboard 1/"; im_count = 1; 
-	//string dir = "D:/My RGBD sequences/two people moving 1/"; im_count = 1;
+	std::string dir = "D:/My RGBD sequences/Me sitting 1/"; im_count = 1; 
+	//std::string dir = "D:/My RGBD sequences/Me sitting 2/"; im_count = 1; 
+	//std::string dir = "D:/My RGBD sequences/Me standing moving cam 1/"; im_count = 1; //- This is bad
+	//std::string dir = "D:/My RGBD sequences/Me standing moving cam 2/"; im_count = 1; 
+	//std::string dir = "D:/My RGBD sequences/Me opening door cam slow 1/"; im_count = 1; 
+	//std::string dir = "D:/My RGBD sequences/Me cleaning whiteboard 1/"; im_count = 1; 
+	//std::string dir = "D:/My RGBD sequences/two people moving 1/"; im_count = 1;
 	cf.loadImageFromSequence(dir, im_count, res_factor);
 	cf.createImagePyramid();
 
@@ -67,14 +71,11 @@ int main()
 
 		switch (pushed_key) {
 
-        //Read new image and solve
+        //Load new image and solve
         case 'n':
 			im_count += decimation;
-			cf.im_r_old.swap(cf.im_r);
-			cf.im_g_old.swap(cf.im_g);
-			cf.im_b_old.swap(cf.im_b);
 			stop = cf.loadImageFromSequence(dir, im_count, res_factor);
-            cf.mainIteration(true);
+            cf.run_VO_SF(true);
             cf.createImagesOfSegmentations();
             cf.updateSceneImageSeq();
             break;
@@ -85,7 +86,7 @@ int main()
 			break;
 			
 		//Close the program
-		case 'p':
+		case 'e':
 			stop = true;
 			break;
 		}
@@ -93,11 +94,8 @@ int main()
 		if ((continuous_exec)&&(!stop))
 		{
 			im_count += decimation;
-			cf.im_r_old.swap(cf.im_r);
-			cf.im_g_old.swap(cf.im_g);
-			cf.im_b_old.swap(cf.im_b);
 			stop = cf.loadImageFromSequence(dir, im_count, res_factor);
-            cf.mainIteration(true);
+            cf.run_VO_SF(true);
             cf.createImagesOfSegmentations();
 			cf.updateSceneImageSeq();
 		}

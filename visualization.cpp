@@ -1,13 +1,32 @@
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
-#include "joint_vo_sf.h"
-//#include "dvo/opencv_ext.hpp"
-
+#include <joint_vo_sf.h>
 
 using namespace mrpt;
 using namespace mrpt::poses;
 using namespace mrpt::opengl;
 using namespace mrpt::utils;
-using namespace std;
 using namespace Eigen;
 
 
@@ -44,7 +63,7 @@ void VO_SF::initializeSceneCamera()
 	FOV->setPose(cam_pose);
 	scene->insert( FOV );
 
-	//Reference tk
+	//Reference est
 	opengl::CSetOfObjectsPtr reference_cam = opengl::stock_objects::CornerXYZ();
 	reference_cam->setScale(0.2);
 	reference_cam->setPose(cam_pose);
@@ -81,7 +100,6 @@ void VO_SF::initializeSceneCamera()
 
 void VO_SF::initializeSceneDatasets()
 {
-
 	global_settings::OCTREE_RENDER_MAX_POINTS_PER_NODE = 10000000;
 	window.resize(1600,800);
 	window.setPos(300,0);
@@ -130,7 +148,6 @@ void VO_SF::initializeSceneDatasets()
 	scene->insert( sf_points );
 
 
-
 	//Labels
 	COpenGLViewportPtr vp_image = scene->createViewport("image");
     vp_image->setViewportPosition(0.775,0.675,320,240);
@@ -173,12 +190,17 @@ void VO_SF::initializeSceneImageSeq()
 	FOV->setPose(cam_pose);
 	scene->insert( FOV );
 
-	//Reference tk
+	//Reference est
 	opengl::CSetOfObjectsPtr reference_cam = opengl::stock_objects::CornerXYZ();
 	reference_cam->setScale(0.2);
 	reference_cam->setPose(cam_pose);
 	scene->insert( reference_cam );
 
+	//Estimated trajectory
+	opengl::CSetOfLinesPtr estimated_traj = opengl::CSetOfLines::Create();
+	estimated_traj->setColor(0.f, 0.8f, 0.f);
+	estimated_traj->setLineWidth(5.f);
+	scene->insert(estimated_traj);
 
 	//3D points (last frame)
 	opengl::CPointCloudColouredPtr seg_points = opengl::CPointCloudColoured::Create();
@@ -186,7 +208,6 @@ void VO_SF::initializeSceneImageSeq()
 	seg_points->setPointSize(2);
 	seg_points->enablePointSmooth(1);
 	scene->insert( seg_points );
-
 
     //Scene Flow (includes initial point cloud)
     opengl::CVectorField3DPtr sf = opengl::CVectorField3D::Create();
@@ -351,6 +372,11 @@ void VO_SF::updateSceneDatasets(const CPose3D &gt, const CPose3D &gt_old)
 	window.unlockAccess3DScene();
 	window.repaint();
 
+	//Only used for the visualization (assuming here that the update method is only called once per new frame)
+	im_r_old.swap(im_r);
+	im_g_old.swap(im_g);
+	im_b_old.swap(im_b);
+
 }
 
 void VO_SF::updateSceneImageSeq()
@@ -375,12 +401,14 @@ void VO_SF::updateSceneImageSeq()
 	//Frustum
 	opengl::CFrustumPtr FOV = scene->getByClass<CFrustum>(0);
 	FOV->setPose(cam_pose);
-	scene->insert( FOV );
 
 	//Reference tk
 	opengl::CSetOfObjectsPtr reference_cam = scene->getByClass<CSetOfObjects>(0);
 	reference_cam->setPose(cam_pose);
-	scene->insert( reference_cam );
+
+	//Estimated trajectory
+	opengl::CSetOfLinesPtr estimated_traj = scene->getByClass<CSetOfLines>(0);
+	estimated_traj->appendLine(cam_pose[0], cam_pose[1], cam_pose[2], cam_oldpose[0], cam_oldpose[1], cam_oldpose[2]);
 
 	//3D points (last frame)
 	opengl::CPointCloudColouredPtr points = scene->getByClass<CPointCloudColoured>(0);
@@ -392,7 +420,7 @@ void VO_SF::updateSceneImageSeq()
 		for (unsigned int v=0; v<rows; v++)
             if (depth_old_ref(v,u) != 0.f)
 			{		
-				const float mult = (bf_segm[labels_ref(v,u)] < 0.333f) ? 0.25f : brigthing_fact;
+				const float mult = (b_segm[labels_ref(v,u)] < 0.333f) ? 0.25f : brigthing_fact;
 				const float red = mult*(im_r_old(size_factor*v,size_factor*u)-1.f)+1.f;
 				const float green = mult*(im_g_old(size_factor*v,size_factor*u)-1.f)+1.f;
 				const float blue = mult*(im_b_old(size_factor*v,size_factor*u)-1.f)+1.f;
@@ -405,6 +433,16 @@ void VO_SF::updateSceneImageSeq()
 	opengl::CVectorField3DPtr sf = scene->getByClass<CVectorField3D>(0);
 	sf->setPose(cam_pose);
     sf->setPointCoordinates(depth_old[repr_level], xx_old[repr_level], yy_old[repr_level]);
+
+	//Modify scene flow to show only that of the uncertain or dynamic clusters
+	for (unsigned int u=0; u<cols; u++)
+		for (unsigned int v=0; v<rows; v++)
+			if (b_segm[labels_ref(v,u)] < 0.333f)
+			{
+				motionfield[0](v,u) = 0.f;
+				motionfield[1](v,u) = 0.f;
+				motionfield[2](v,u) = 0.f;
+			}
     sf->setVectorField(motionfield[0], motionfield[1], motionfield[2]);
 
 
@@ -431,6 +469,58 @@ void VO_SF::updateSceneImageSeq()
 			
 	window.unlockAccess3DScene();
 	window.repaint();
+
+	//Only used for the visualization (assuming here that the update method is only called once per new frame)
+	im_r_old.swap(im_r);
+	im_g_old.swap(im_g);
+	im_b_old.swap(im_b);
 }
 
 
+void VO_SF::createImagesOfSegmentations()
+{
+    image_level = round(log2(width/cols));
+
+	//Refs
+	const Matrix<float, NUM_LABELS+1, Dynamic> label_funct_ref = label_funct[image_level];
+	const MatrixXf &depth_old_ref = depth_old[image_level];
+
+    //Associate colors to labels
+    float r[NUM_LABELS], g[NUM_LABELS], b[NUM_LABELS];
+    for (unsigned int l=0; l<NUM_LABELS; l++)
+    {
+        const float indx = float(l)/float(NUM_LABELS-1);
+        mrpt::utils::colormap(mrpt::utils::cmJET, indx, r[l], g[l], b[l]);
+    }
+
+	for (unsigned int c=0; c<3; c++)
+	{
+		labels_image[c].fill(0.f);
+		backg_image[c].fill(0.f);
+	}
+
+	//labels_image - Different colors to different clusters
+	//backg_image - Static parts in blue and moving objects in red
+    for (unsigned int u=0; u<cols; u++)
+        for (unsigned int v=0; v<rows; v++)
+            if (depth_old_ref(v,u) != 0.f)
+			{
+                for (unsigned int l=0; l<NUM_LABELS; l++)
+                {
+                    const float lab = label_funct_ref(l, v+u*rows);
+					if (lab != 0.f)
+					{
+						labels_image[0](v,u) += lab*r[l];
+						labels_image[1](v,u) += lab*g[l];
+						labels_image[2](v,u) += lab*b[l];
+					}
+
+					float aux_var;
+					if (b_segm[l] < 0.333) 		aux_var = 0.f;
+					else if (b_segm[l] > 0.667)	aux_var = 1.f;
+					else							aux_var = std::min(1.f, 3.f*(b_segm[l] - 0.333f));
+					backg_image[0](v,u) += aux_var*lab;
+					backg_image[2](v,u) += (1.f - aux_var)*lab;
+                }
+			}
+}

@@ -1,10 +1,30 @@
+/*********************************************************************************
+**Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering	**
+**------------------------------------------------------------------------------**
+**																				**
+**	Copyright(c) 2017, Mariano Jaimez Tarifa, University of Malaga & TU Munich	**
+**	Copyright(c) 2017, Christian Kerl, TU Munich								**
+**	Copyright(c) 2017, MAPIR group, University of Malaga						**
+**	Copyright(c) 2017, Computer Vision group, TU Munich							**
+**																				**
+**  This program is free software: you can redistribute it and/or modify		**
+**  it under the terms of the GNU General Public License (version 3) as			**
+**	published by the Free Software Foundation.									**
+**																				**
+**  This program is distributed in the hope that it will be useful, but			**
+**	WITHOUT ANY WARRANTY; without even the implied warranty of					**
+**  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the				**
+**  GNU General Public License for more details.								**
+**																				**
+**  You should have received a copy of the GNU General Public License			**
+**  along with this program. If not, see <http://www.gnu.org/licenses/>.		**
+**																				**
+*********************************************************************************/
 
-#include "joint_vo_sf.h"
-#include "structs_parallelization.h"
+#include <joint_vo_sf.h>
+#include <structs_parallelization.h>
 
 using namespace mrpt;
-using namespace mrpt::math;
-using namespace mrpt::poses;
 using namespace mrpt::utils;
 using namespace std;
 using namespace Eigen;
@@ -24,10 +44,10 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(3*640*480/(2*res_factor*re
 	//Solver
 	k_photometric_res = 0.15f;
 	irls_chi2_decrement_threshold = 0.98f;
-    irls_var_delta_threshold = 1e-6f;
-	iter_irls = 10;
+    irls_delta_threshold = 1e-6f;
+	max_iter_irls = 10;
 	max_iter_per_level = 3;
-	use_backg_temp_reg = false;
+	use_b_temp_reg = false;
 
 	//CamPose
 	cam_pose.setFromValues(0,0,0,0,0,0);
@@ -61,6 +81,7 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(3*640*480/(2*res_factor*re
     xx_warped.resize(pyr_levels);
     yy_warped.resize(pyr_levels);
 	labels.resize(pyr_levels);
+	label_funct.resize(pyr_levels);
 
 	for (unsigned int i = 0; i<pyr_levels; i++)
     {
@@ -81,6 +102,8 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(3*640*480/(2*res_factor*re
             xx_warped[i].resize(rows_i,cols_i);
             yy_warped[i].resize(rows_i,cols_i);
 			labels[i].resize(rows_i, cols_i);
+			label_funct[i].resize(NUM_LABELS+1, rows_i*cols_i);
+            label_funct[i].assign(0.f);
 		}
     }
 
@@ -93,28 +116,16 @@ VO_SF::VO_SF(unsigned int res_factor) : ws_foreground(3*640*480/(2*res_factor*re
 
     //                      Labels
     //=========================================================
-	bf_segm_image_warped.setSize(rows,cols);
-	bf_segm_image_warped.fill(0.f);
-	label_in_backg.fill(true);
-	label_in_foreg.fill(false);
+	b_segm_image_warped.setSize(rows,cols);
+	b_segm_image_warped.fill(0.f);
+	label_static.fill(true);
+	label_dynamic.fill(false);
 
     for (unsigned int c=0; c<3; c++)
 	{
 		backg_image[c].resize(rows,cols);
         labels_image[c].resize(rows,cols);
 	}
-
-    label_funct.resize(pyr_levels);
-    for (unsigned int i = 0; i<pyr_levels; i++)
-    {
-        const unsigned int s = pow(2.f,int(i));
-        cols_i = width/s; rows_i = height/s;
-        if (cols_i <= cols)
-        {
-            label_funct[i].resize(NUM_LABELS+1, rows_i*cols_i);
-            label_funct[i].assign(0.f);
-        }
-    }
 }
 
 void VO_SF::loadImagePairFromFiles(string files_dir, unsigned int res_factor)
@@ -222,16 +233,18 @@ void VO_SF::saveFlowAndSegmToFile(string files_dir)
 	cv::FileStorage SFlow;
     SFlow.open(name, cv::FileStorage::WRITE);
 
-    //Stored in camera coordinates (z -> pointing to the front)
+    //Stored with the following coordinates:
+	//x = left/right
+	//y = up/down
+	//z = depth -> pointing to the front
 	cv::Mat rmx(rows, cols, CV_32FC1), rmy(rows, cols, CV_32FC1), rmz(rows, cols, CV_32FC1);
-	cv::Mat segm(rows, cols, CV_8U), segm_col(rows, cols, CV_8UC3), kmeans(rows, cols, CV_8UC3);
+	cv::Mat segm_col(rows, cols, CV_8UC3), kmeans(rows, cols, CV_8UC3);
     for (unsigned int v=0; v<rows; v++)
         for (unsigned int u=0; u<cols; u++)
         {
             rmx.at<float>(v,u) = motionfield[1](rows-1-v,u);
             rmy.at<float>(v,u) = motionfield[2](rows-1-v,u);
             rmz.at<float>(v,u) = motionfield[0](rows-1-v,u);
-			segm.at<unsigned char>(v,u) = int(255.f*min(1.f, bf_segm[labels[image_level](rows-1-v,u)]));
 			segm_col.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f*backg_image[2](rows-1-v,u), 255.f*backg_image[1](rows-1-v,u), 255.f*backg_image[0](rows-1-v,u));
 			kmeans.at<cv::Vec3b>(v,u) = cv::Vec3b(255.f* labels_image[2](rows-1-v,u), 255.f*labels_image[1](rows-1-v,u), 255.f*labels_image[0](rows-1-v,u));
         }
@@ -243,11 +256,6 @@ void VO_SF::saveFlowAndSegmToFile(string files_dir)
 	cout << endl << "Scene flow saved in " << name;
 
 	//Save segmentations
-	sprintf(aux, "Segmentation_backg.png");
-    name = files_dir + aux;
-	cv::imwrite(name, segm);
-	cout << endl << "Segmentation (grayscale) saved in " << name;
-
 	sprintf(aux, "Segmentation_backg_color.png");
     name = files_dir + aux;
 	cv::imwrite(name, segm_col);
@@ -320,9 +328,7 @@ void VO_SF::createImagePyramid()
 
                         if (dcenter != 0.f)
                         {
-                            float sum_d = 0.f;
-                            float sum_c = 0.f;
-                            float weight = 0.f;
+                            float sum_d = 0.f, sum_c = 0.f, weight = 0.f;
 
                             for (unsigned char k=0; k<16; k++)
                             {
@@ -340,12 +346,8 @@ void VO_SF::createImagePyramid()
                         }
                         else
                         {
-                            float sum_c = 0.f;
-                            for (unsigned char k=0; k<16; k++)
-                                sum_c += f_mask(k)*intensity_block(k);
-
-                            depth_here(v,u) = 0.f;
-                            intensity_here(v,u) = sum_c;
+                            intensity_here(v,u) = (f_mask*intensity_block.array()).sum();
+							depth_here(v,u) = 0.f;
                         }
                     }
 
@@ -399,7 +401,7 @@ void VO_SF::calculateCoord()
 
 void VO_SF::calculateCoord(cv::Rect region)
 {		
-    unsigned int x = region.tl().x, y = region.tl().y, w = region.width, h = region.height;
+    const unsigned int x = region.tl().x, y = region.tl().y, w = region.width, h = region.height;
 
     Null.block(y,x,h,w).assign(false);
 
@@ -435,7 +437,7 @@ void VO_SF::calculateCoord(cv::Rect region)
 
 void VO_SF::calculateDerivatives()
 {
-	//Compute connectivity
+	//Compute weights for the gradients
 	MatrixXf rx(rows_i,cols_i), ry(rows_i,cols_i);
     rx.fill(1.f); ry.fill(1.f);
 
@@ -454,7 +456,6 @@ void VO_SF::calculateDerivatives()
         for (unsigned int v = 0; v < rows_i; v++)
             if (Null(v,u) == false)
             {
-                //rx(v,u) = sqrtf(square(xx_ref(v,u+1) - xx_ref(v,u)) + square(depth_ref(v,u+1) - depth_ref(v,u)));
 				rx(v,u) = abs(depth_ref(v,u+1) - depth_ref(v,u)) + epsilon_depth;
 				rx_intensity(v,u) = abs(intensity_ref(v,u+1) - intensity_ref(v,u)) + epsilon_intensity;
             }
@@ -463,16 +464,9 @@ void VO_SF::calculateDerivatives()
         for (unsigned int v = 0; v < rows_i-1; v++)
             if (Null(v,u) == false)
             {
-                //ry(v,u) = sqrtf(square(yy_ref(v+1,u) - yy_ref(v,u)) + square(depth_ref(v+1,u) - depth_ref(v,u)));
 				ry(v,u) = abs(depth_ref(v+1,u) - depth_ref(v,u)) + epsilon_depth;
 				ry_intensity(v,u) = abs(intensity_ref(v+1,u) - intensity_ref(v,u)) + epsilon_intensity;
             }
-
-	//Alternative using block operations (same speed in my test with few null pixels)
-	//rx.block(0,0, rows_i, cols_i-1) = (depth_ref.block(0,1,rows_i,cols_i-1) - depth_ref.block(0,0,rows_i,cols_i-1)).array().abs() + epsilon_depth;
-	//ry.block(0,0, rows_i-1, cols_i) = (depth_ref.block(1,0,rows_i-1,cols_i) - depth_ref.block(0,0,rows_i-1,cols_i)).array().abs() + epsilon_depth;
-	//rx_intensity.block(0,0, rows_i, cols_i-1) = (intensity_ref.block(0,1,rows_i,cols_i-1) - intensity_ref.block(0,0,rows_i,cols_i-1)).array().abs() + epsilon_intensity;
-	//ry_intensity.block(0,0, rows_i-1, cols_i) = (intensity_ref.block(1,0,rows_i-1,cols_i) - intensity_ref.block(0,0,rows_i-1,cols_i)).array().abs() + epsilon_intensity;
 
 
     //Spatial derivatives
@@ -509,15 +503,9 @@ void VO_SF::calculateDerivatives()
 
 void VO_SF::computeWeights()
 {
-    weights_c.resize(rows_i, cols_i);
     weights_c.assign(0.f);
-	weights_d.resize(rows_i, cols_i);
     weights_d.assign(0.f);
 	const MatrixXi &labels_ref = labels[image_level];
-
-	//Parameters for error_measurement
-    //const float km = 1.f;
-    //const float kz2 = 0.01f;
 	
 	//Parameters for error_linearization
     const float kduvt_c = 10.f;
@@ -527,29 +515,16 @@ void VO_SF::computeWeights()
 		for (unsigned int v = 1; v < rows_i-1; v++)
             if (Null(v,u) == false)
 			{
-				//Compute error_measurement
-                //const float error_m_c = flag_test ? 1.f : km*square(square(depth_inter[image_level](v,u)));
+				//Set measurement error
 				const float error_m_c = 1.f; 
+				const float error_m_d = 0.01f;
 
-				//const float error_m = kz2*square(square(depth_inter[image_level](v,u)));
-				const float error_m_d = 0.01f; //kz2*depth_inter[image_level](v,u);
-
-
-				//Compute error linearization
+				//Approximate linearization error
 				const float error_l_c = kduvt_c*(square(dct(v,u)) + square(dcu(v,u)) + square(dcv(v,u)));
+                const float error_l_d = kduvt_d*(square(ddt(v,u)) + square(ddu(v,u)) + square(ddv(v,u))); 
 
-				//const float ini_du = depth_old_ref(v,u+1) - depth_old_ref(v,u-1);
-                //const float ini_dv = depth_old_ref(v+1,u) - depth_old_ref(v-1,u);
-                //const float final_du = depth_warped_ref(v,u+1) - depth_warped_ref(v,u-1);
-                //const float final_dv = depth_warped_ref(v+1,u) - depth_warped_ref(v-1,u);
-                //const float dut = ini_du - final_du;
-                //const float dvt = ini_dv - final_dv;
-                //const float duu = ddu(v,u+1) - ddu(v,u-1);
-                //const float dvv = ddv(v+1,u) - ddv(v-1,u);
-                //const float dvu = ddu(v+1,u) - ddu(v-1,u); //Completely equivalent to compute duv
-                const float error_l_d = kduvt_d*(square(ddt(v,u)) + square(ddu(v,u)) + square(ddv(v,u))); // + k2dt*(square(dut) + square(dvt)) + k2duv*(square(duu) + square(dvv) + square(dvu));
-
-				const float w_dinobj = label_in_backg[labels_ref(v,u)] ? max(0.f, 1.f - bf_segm[labels_ref(v,u)]) : 1.f;
+				//Downweight uncertain regions
+				const float w_dinobj = label_static[labels_ref(v,u)] ? max(0.f, 1.f - b_segm[labels_ref(v,u)]) : 1.f;
 
                 weights_c(v,u) = sqrtf(w_dinobj/(error_m_c + error_l_c));
 				weights_d(v,u) = sqrtf(w_dinobj/(error_m_d + error_l_d)); 
@@ -574,30 +549,29 @@ void VO_SF::solveRobustOdometryCauchy()
             if (Null(v,u) == false)
                 ws.indices.push_back(std::make_pair(v, u));
 
-    size_t valid_points = ws.indices.size();
-    float *A = ws.A, *B = ws.B;
 
 	//initialize A and B for the first computation of residuals
+	float *A = ws.A, *B = ws.B;
     JacobianElementForRobustOdometryFn fn_ini(ws,*this);
     JacobianElementForRobustOdometryFn::Range range_ini(0, ws.indices.size(), 32);
     const float sum_of_residuals = tbb::parallel_reduce(range_ini, 0.f, fn_ini, std::plus<float>()); // parallel version
     //float mean_res = fn(range, 0.f); // linear version
 
 
-    //Solve IRLS - Cauchy kernel
-    //===================================================================
+    //Solve IRLS (Cauchy robust penalty)
+	//===================================================================
 	float chi2_last = numeric_limits<float>::max(), chi2;
 	Vector6f robust_odo = Vector6f::Zero();
     NormalEquation::MatrixA AtA; NormalEquation::VectorB AtB;
 
 	//Aux structure for the solver
 	IrlsContext ctx;
-	ctx.residuals.resize(2*valid_points, 1);
-	ctx.num_pixels = valid_points;
+	ctx.residuals.resize(2*ws.indices.size(), 1);
+	ctx.num_pixels = ws.indices.size();
 	ctx.A = A; ctx.B = B;
 	ctx.Cauchy_factor = 16.f; //25 before
 	
-	for (unsigned int iter=0; iter<=iter_irls; iter++)
+	for (unsigned int iter=0; iter<=max_iter_irls; iter++)
     {
         //Recompute residuals and update the Cauchy parameter
 		ctx.Var = robust_odo;
@@ -608,6 +582,7 @@ void VO_SF::solveRobustOdometryCauchy()
 		IrlsElementFn::Range range(0, ws.indices.size(), 32);
         NormalEquationAndChi2 nes_and_chi2 = tbb::parallel_reduce(range, NormalEquationAndChi2(), fn, NormalEquationAndChi2::Reduce());
 
+		//Solve the linear system of equations with least squares
         nes_and_chi2.nes.get(AtA, AtB);
         const Vector6f new_sol = AtA.ldlt().solve(-AtB);
 		const Vector6f delta_sol = robust_odo - new_sol;
@@ -618,22 +593,17 @@ void VO_SF::solveRobustOdometryCauchy()
 		//Check convergence - It is using the old residuals to check convergence, not the very last one.
 		const float chi2_ratio = chi2/max(1e-10f, chi2_last);
 		chi2_last = chi2;
-		if ((chi2_ratio > irls_chi2_decrement_threshold)||(delta_sol.lpNorm<Infinity>() < irls_var_delta_threshold))
-		{
-			//printf("\n Number of iterations = %d", iter+1);
+		if ((chi2_ratio > irls_chi2_decrement_threshold)||(delta_sol.lpNorm<Infinity>() < irls_delta_threshold))
 			break;	
-		}
     }
 
-	//Compute covariance of the estimate and filter the motion
-	kai_loc_level_odometry = robust_odo;
-	computeTransformationFromTwist();
+	//Compute the rigid transformation associated to the solution
+	computeTransformationFromTwist(robust_odo, true);
 }
 
 
-void VO_SF::solveMotionForIndices(vector<pair<int, int> > const&indices, Vector6f &Var, SolveForMotionWorkspace &ws, bool is_background)
+void VO_SF::solveMotionForIndices(vector<pair<int, int> > const&indices, Vector6f &twist, SolveForMotionWorkspace &ws, bool is_background)
 {
-	const size_t num_points = indices.size();
 	float *A = ws.A, *B = ws.B;
 
 	JacobianElementFn fn_ini(ws,*this);
@@ -644,10 +614,10 @@ void VO_SF::solveMotionForIndices(vector<pair<int, int> > const&indices, Vector6
 	NormalEquationAndChi2 nes_and_chi2_ini = tbb::parallel_reduce(range_ini, NormalEquationAndChi2(), fn_ini, NormalEquationAndChi2::Reduce()); // parallel version
 	//NormalEquationAndChi2 nes_and_chi2 = fn(range, NormalEquationAndChi2()); // linear version
 	nes_and_chi2_ini.nes.get(AtA, AtB);
-	Var = AtA.ldlt().solve(-AtB);
+	twist = AtA.ldlt().solve(-AtB);
 
 
-	//Solve iteratively reweighted least squares
+	//Solve IRLS (Cauchy robust penalty)
 	//===================================================================
 	float chi2_last = numeric_limits<float>::max(); 
 
@@ -658,10 +628,10 @@ void VO_SF::solveMotionForIndices(vector<pair<int, int> > const&indices, Vector6
 	ctx.A = A; ctx.B = B;
 	ctx.Cauchy_factor = is_background ? 0.25f : 1.f;
 
-	for (unsigned int it=1; it<=iter_irls; it++)
+	for (unsigned int it=1; it<=max_iter_irls; it++)
 	{	
 		//Recompute residuals and update the Cauchy parameter
-		ctx.Var = Var;
+		ctx.Var = twist;
 		ctx.computeNewResiduals();
 		
 		//Build the system with the new weights
@@ -669,52 +639,48 @@ void VO_SF::solveMotionForIndices(vector<pair<int, int> > const&indices, Vector6
 		IrlsElementFn::Range range(0, indices.size(), 32);
 		NormalEquationAndChi2 nes_and_chi2 = tbb::parallel_reduce(range, NormalEquationAndChi2(), fn, NormalEquationAndChi2::Reduce());
 		
-		//Solve the linear system of equations using a minimum least squares method
+		//Solve the linear system of equations with least squares
 		nes_and_chi2.nes.get(AtA, AtB);
-		const Vector6f Var_new = AtA.ldlt().solve(-AtB);
-		const Vector6f Var_delta = Var - Var_new;
-		Var = Var_new;
+		const Vector6f twist_new = AtA.ldlt().solve(-AtB);
+		const Vector6f twist_delta = twist - twist_new;
+		twist = twist_new;
 
 		//Check convergence
 		const float chi2_ratio = nes_and_chi2.chi2/max(1e-10f, chi2_last);
-		if (chi2_ratio > irls_chi2_decrement_threshold || Var_delta.lpNorm<Infinity>() < irls_var_delta_threshold)
+		if (chi2_ratio > irls_chi2_decrement_threshold || twist_delta.lpNorm<Infinity>() < irls_delta_threshold)
 			break;
 		
 		chi2_last = nes_and_chi2.chi2;
 	}
-
-	//If it is background -> Update odometry
-	if (is_background)
-	{
-		kai_loc_level_odometry = Var;
-		computeTransformationFromTwist();
-		Var = kai_loc_level_odometry;
-	}
 }
 
 
-void VO_SF::solveMotionForegroundAndBackground()
+void VO_SF::solveMotionAllClusters()
 {
-    MemberFunctor<VO_SF, &VO_SF::solveMotionForeground> solve_motion_foreground(*this);
-    MemberFunctor<VO_SF, &VO_SF::solveMotionBackground> solve_motion_background(*this);
+    MemberFunctor<VO_SF, &VO_SF::solveMotionDynamicClusters> solve_motion_dyn_clusters(*this);
+    MemberFunctor<VO_SF, &VO_SF::solveMotionStaticClusters> solve_motion_stat_clusters(*this);
 
-    // only helps if there is more than one motion ;)
-    //tbb::parallel_invoke(solve_motion_background, solve_motion_foreground);
+	//Linal version
+    //if (level > 0) solve_motion_dyn_clusters(); //Not at the very first level of the pyramid, it is too small
+    //solve_motion_stat_clusters();
 
-    if (level > 0) solve_motion_foreground(); //Not at the very first level of the pyramid, it is too small
-    solve_motion_background();
+	//At the first level we only compute the odometry (there are not enough pixels to get a good solution for each individual cluster)
+	if (level == 0)		solve_motion_stat_clusters();
+	else				tbb::parallel_invoke(solve_motion_stat_clusters, solve_motion_dyn_clusters); //only helps if there is more than one motion
 }
 
-void VO_SF::solveMotionForeground()
+void VO_SF::solveMotionDynamicClusters()
 {
     const float in_threshold = 0.2f;
-    Matrix <float,6,1> Var;
+    Vector6f twist;
+
+	//Refs
     vector<pair<int,int> > &indices = ws_foreground.indices;
 	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
 
     for (unsigned int l=0; l<NUM_LABELS; l++)
     {
-        if (!label_in_foreg[l])
+        if (!label_dynamic[l])
 			continue;
 		
         //Create the indices for the elements in this cluster
@@ -726,25 +692,27 @@ void VO_SF::solveMotionForeground()
                     indices.push_back(make_pair(v,u));
 
 		//Solve
-        solveMotionForIndices(indices, Var, ws_foreground, false);
+        solveMotionForIndices(indices, twist, ws_foreground, false);
 
         //Save the solution
-		updateVelocitiesAndTransformations(Var, l);
+		computeTransformationFromTwist(twist, false, l);
     }
 }
 
-void VO_SF::solveMotionBackground()
+void VO_SF::solveMotionStaticClusters()
 {
     const float in_threshold = 0.2f;
-    Vector6f Var;
+    Vector6f twist;
+
+	//Refs
+	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
     vector<pair<int,int> > &indices = ws_background.indices;
     indices.clear();
-	const Matrix<float, NUM_LABELS+1, Dynamic> &labels_ref = label_funct[image_level];
 
 	//Create the indices for the elements in the background
     for (unsigned int l=0; l<NUM_LABELS; l++)
     {
-        if (!label_in_backg[l])
+        if (!label_static[l])
 			continue;
 
         for (unsigned int u = 1; u < cols_i-1; u++)
@@ -753,56 +721,51 @@ void VO_SF::solveMotionBackground()
                     indices.push_back(make_pair(v,u));
 	}
 
-    //Solve - The odometry is updated inside this method too (that's why it needs the flag)
-    solveMotionForIndices(indices, Var, ws_background, true);
+    //Solve
+    solveMotionForIndices(indices, twist, ws_background, true);
 
     //Save the solution
+	computeTransformationFromTwist(twist, true);
 	for (unsigned int l=0; l<NUM_LABELS; l++)
-		if ((label_in_backg[l])&&(!label_in_foreg[l])) 
-			updateVelocitiesAndTransformations(Var, l);
+		if ((label_static[l])&&(!label_dynamic[l])) 
+			computeTransformationFromTwist(twist, false, l);
 }
 
 
-void VO_SF::updateVelocitiesAndTransformations(Matrix<float,6,1> &last_sol, unsigned int label)
-{
-	const unsigned int l = label;
-    kai_loc_level[l] = last_sol;
-
-    Matrix<float,4,4> local_mat; local_mat.assign(0.f);
-    local_mat(0,1) = -last_sol(5); local_mat(1,0) = last_sol(5);
-    local_mat(0,2) = last_sol(4); local_mat(2,0) = -last_sol(4);
-    local_mat(1,2) = -last_sol(3); local_mat(2,1) = last_sol(3);
-    local_mat(0,3) = last_sol(0); local_mat(1,3) = last_sol(1); local_mat(2,3) = last_sol(2);
-    T[l] = local_mat.exp()*T[l];
-
-    Matrix<float, 4, 4> log_trans = T[l].log();
-    kai_loc[l](0) = log_trans(0,3); kai_loc[l](1) = log_trans(1,3); kai_loc[l](2) = log_trans(2,3);
-    kai_loc[l](3) = -log_trans(1,2); kai_loc[l](4) = log_trans(0,2); kai_loc[l](5) = -log_trans(0,1);	
-}
-
-void VO_SF::getCameraPoseFromBackgroundEstimate()
+void VO_SF::updateCameraPoseFromOdometry()
 {
 	cam_oldpose = cam_pose;
-	CMatrixDouble44 aux_acu = T_odometry;
+	math::CMatrixDouble44 aux_acu = T_odometry;
 	poses::CPose3D pose_aux(aux_acu);
 	cam_pose = cam_pose + pose_aux;
 }
 
-void VO_SF::computeTransformationFromTwist()
+void VO_SF::computeTransformationFromTwist(Vector6f &twist, bool is_odometry, unsigned int label)
 {
-	//Compute the rigid transformation
-	Matrix4f local_mat; local_mat.assign(0.f); 
-	local_mat(0,1) = -kai_loc_level_odometry(5); local_mat(1,0) = kai_loc_level_odometry(5);
-	local_mat(0,2) = kai_loc_level_odometry(4); local_mat(2,0) = -kai_loc_level_odometry(4);
-	local_mat(1,2) = -kai_loc_level_odometry(3); local_mat(2,1) = kai_loc_level_odometry(3);
-	local_mat(0,3) = kai_loc_level_odometry(0);
-	local_mat(1,3) = kai_loc_level_odometry(1);
-	local_mat(2,3) = kai_loc_level_odometry(2);
-	T_odometry = local_mat.exp()*T_odometry;
+	Matrix4f local_mat = Matrix4f::Zero();
 
-    Matrix4f log_trans = T_odometry.log();
-    kai_loc_odometry(0) = log_trans(0,3); kai_loc_odometry(1) = log_trans(1,3); kai_loc_odometry(2) = log_trans(2,3);
-    kai_loc_odometry(3) = -log_trans(1,2); kai_loc_odometry(4) = log_trans(0,2); kai_loc_odometry(5) = -log_trans(0,1);	
+	//Compute the rigid transformation associated to the twist
+	local_mat(0,1) = -twist(5); local_mat(1,0) = twist(5);
+	local_mat(0,2) = twist(4); local_mat(2,0) = -twist(4);
+	local_mat(1,2) = -twist(3); local_mat(2,1) = twist(3);
+	local_mat(0,3) = twist(0); local_mat(1,3) = twist(1); local_mat(2,3) = twist(2);
+
+	//If odometry, update the transformation and the velocity
+	if (is_odometry)
+	{
+		twist_level_odometry = twist;
+		T_odometry = local_mat.exp()*T_odometry;
+
+		Matrix4f log_trans = T_odometry.log();
+		twist_odometry(0) = log_trans(0,3); twist_odometry(1) = log_trans(1,3); twist_odometry(2) = log_trans(2,3);
+		twist_odometry(3) = -log_trans(1,2); twist_odometry(4) = log_trans(0,2); twist_odometry(5) = -log_trans(0,1);	
+	}
+
+	//If moving cluster, just update its transformation (velocity not used)
+	else
+	{
+		T_clusters[label] = local_mat.exp()*T_clusters[label];	
+	}
 }
 
 
@@ -831,7 +794,7 @@ void VO_SF::warpImages()
 
 void VO_SF::warpImages(cv::Rect region)
 {
-    unsigned int x = region.tl().x, y = region.tl().y, w = region.width, h = region.height;
+    const unsigned int x = region.tl().x, y = region.tl().y, w = region.width, h = region.height;
 
     //Camera parameters (which also depend on the level resolution)
     const float f = float(cols_i)/(2.f*tan(0.5f*fovh));
@@ -855,24 +818,24 @@ void VO_SF::warpImages(cv::Rect region)
     yy_warped_ref.block(y, x, h, w).assign(0.f);
     intensity_warped_ref.block(y, x, h, w).assign(0.f);
 
-    //Compute the rigid transformation associated to the labels
-    Matrix4f mytrans[NUM_LABELS];
+    //Compute the inverse rigid transformation associated to the labels
+    Matrix4f inv_trans[NUM_LABELS];
     for (unsigned int l=0; l<NUM_LABELS; l++)
-		mytrans[l] = T[l].inverse();
+		inv_trans[l] = T_clusters[l].inverse();
 
-
+	//Fast warping
     for (unsigned int j = x; j < x + w; j++)
         for (unsigned int i = y; i< y + h; i++)
         {
             const int pixel_label = i+j*rows_i;
 			const float z = depth_old_ref(i,j);
-            if ((z > 0.f)&&(labels_ref(NUM_LABELS, pixel_label) < 1.f))
+            if ((z > 0.f)&&(labels_ref(NUM_LABELS, pixel_label) != 1.f))
             {
-                //Interpolate between the transformations
-                Matrix4f trans; trans.assign(0.f);
+                //Interpolate between the transformations (not correct but faster and works)
+                Matrix4f trans = Matrix4f::Zero();
                 for (unsigned int l=0; l<=NUM_LABELS; l++)
                     if (labels_ref(l,pixel_label) != 0.f)
-                        trans += labels_ref(l,pixel_label)*mytrans[l];
+                        trans += labels_ref(l,pixel_label)*inv_trans[l];
 
                 //Transform point to the warped reference frame
                 const float depth_w = trans(0,0)*z + trans(0,1)*xx_old_ref(i,j) + trans(0,2)*yy_old_ref(i,j) + trans(0,3);
@@ -892,7 +855,7 @@ void VO_SF::warpImages(cv::Rect region)
         }
 }
 
-void VO_SF::warpImagesOld()
+void VO_SF::warpImagesAccurate()
 {
 	//Camera parameters (which also depend on the level resolution)
 	const float f = float(cols_i)/(2.f*tan(0.5f*fovh));
@@ -911,11 +874,8 @@ void VO_SF::warpImagesOld()
 	depth_warped_ref.assign(0.f);
 	intensity_warped_ref.assign(0.f);
 
-	//Rigid transformation and weights
-	Matrix4f acu_trans = T_odometry; 
-	MatrixXf wacu(rows_i,cols_i);
-	wacu.assign(0.f);
-
+	//Aux variables
+	MatrixXf wacu(rows_i,cols_i); wacu.assign(0.f);
 	const float cols_lim = float(cols_i-1);
 	const float rows_lim = float(rows_i-1);
 
@@ -930,15 +890,15 @@ void VO_SF::warpImagesOld()
 			{
 				//Transform point to the warped reference frame
 				const float intensity_w = intensity_ref(i,j);
-				const float depth_w = acu_trans(0,0)*z + acu_trans(0,1)*xx_ref(i,j) + acu_trans(0,2)*yy_ref(i,j) + acu_trans(0,3);
-				const float x_w = acu_trans(1,0)*z + acu_trans(1,1)*xx_ref(i,j) + acu_trans(1,2)*yy_ref(i,j) + acu_trans(1,3);
-				const float y_w = acu_trans(2,0)*z + acu_trans(2,1)*xx_ref(i,j) + acu_trans(2,2)*yy_ref(i,j) + acu_trans(2,3);
+				const float depth_w = T_odometry(0,0)*z + T_odometry(0,1)*xx_ref(i,j) + T_odometry(0,2)*yy_ref(i,j) + T_odometry(0,3);
+				const float x_w = T_odometry(1,0)*z + T_odometry(1,1)*xx_ref(i,j) + T_odometry(1,2)*yy_ref(i,j) + T_odometry(1,3);
+				const float y_w = T_odometry(2,0)*z + T_odometry(2,1)*xx_ref(i,j) + T_odometry(2,2)*yy_ref(i,j) + T_odometry(2,3);
 
 				//Calculate warping
 				const float uwarp = f*x_w/depth_w + disp_u_i;
 				const float vwarp = f*y_w/depth_w + disp_v_i;
 
-				//The warped pixel (which is not integer in general) contributes to all the surrounding ones
+				//The projection after transforming is not integer in general and, hence, the pixel contributes to all the surrounding ones
 				if (( uwarp >= 0.f)&&( uwarp < cols_lim)&&( vwarp >= 0.f)&&( vwarp < rows_lim))
 				{
 					const int uwarp_l = uwarp;
@@ -1004,7 +964,7 @@ void VO_SF::warpImagesOld()
 }
 
 
-void VO_SF::mainIteration(bool create_image_pyr)
+void VO_SF::run_VO_SF(bool create_image_pyr)
 {
 	CTicTac clock; clock.Tic();
 	
@@ -1021,8 +981,8 @@ void VO_SF::mainIteration(bool create_image_pyr)
 	//Create the pyramid for the labels
 	createLabelsPyramidUsingKMeans();
 
-	//Compute warped bf_segmentation (necessary for the robust estimation)
-	computeBackgTemporalRegValues();
+	//Compute warped b_segmentation (necessary for the robust estimation)
+	computeSegTemporalRegValues();
 
 
     //Solve a robust odometry problem to segment the background (coarse-to-fine)
@@ -1030,21 +990,16 @@ void VO_SF::mainIteration(bool create_image_pyr)
     //Initialize the overall transformations to 0
 	T_odometry.setIdentity();
     for (unsigned int l=0; l<NUM_LABELS; l++)
-    {
-        T[l].setIdentity();
-        kai_loc[l].assign(0.f);
-    }
+        T_clusters[l].setIdentity();
 
-    //Solve the system (coarse-to-fine)
+    //Coarse-to-fine
     for (unsigned int i=0; i<ctf_levels; i++)
 		for (unsigned int k=0; k<max_iter_per_level; k++)
 		{
-			//Previous computations
 			level = i;
 			unsigned int s = pow(2.f,int(ctf_levels-(i+1)));
 			cols_i = cols/s; rows_i = rows/s;
 			image_level = ctf_levels - i + round(log2(width/cols)) - 1;
-
 
 			//1. Perform warping
 			if (i == 0)
@@ -1055,24 +1010,24 @@ void VO_SF::mainIteration(bool create_image_pyr)
 				yy_warped[image_level] = yy[image_level];
 			}
 			else 
-                warpImagesOld(); // forward warping, more precise
+                warpImagesAccurate(); // forward warping, more precise
 
 			//2. Compute inter coords (better linearization of the range and optical flow constraints)
 			computeCoordsParallel();
 
-			//4. Compute derivatives
+			//3. Compute derivatives
 			calculateDerivatives();
 
-			//6. Solve odometry
+			//4. Solve odometry
 			solveRobustOdometryCauchy();
 
-			//Convergence of nonlinear iterations
-			if (kai_loc_level_odometry.norm() < 0.04f)
+			//Check convergence of nonlinear iterations
+			if (twist_level_odometry.norm() < 0.04f)
 				break;
 		}
 
 	//Segment static and dynamic parts
-	segmentBackgroundForeground();
+	segmentStaticDynamic();
 
 
 	//Solve the multi-odometry problem (coarse-to-fine)
@@ -1080,22 +1035,19 @@ void VO_SF::mainIteration(bool create_image_pyr)
 	//Set the overall transformations to 0
 	T_odometry.setIdentity();
     for (unsigned int l=0; l<NUM_LABELS; l++)
-    {
-        T[l].setIdentity();
-        kai_loc[l].assign(0.f);
-    }
+        T_clusters[l].setIdentity();
 
+	//Coarse-to-fine
     for (unsigned int i=0; i<ctf_levels; i++)
     {
-        //Previous computations
         level = i;
         unsigned int s = pow(2.f,int(ctf_levels-(i+1)));
         cols_i = cols/s; rows_i = rows/s;
         image_level = ctf_levels - i + round(log2(width/cols)) - 1;
 
 		//1. Perform warping
-		//Info: The accuracy of the odometry is slightly better using the other warping but I cannot use in general because
-		// the labels are defined in the old image (better about 7% for the only sequence I have tested it)
+		//Info: The accuracy of the odometry is slightly better using the other warping but I cannot use it here because
+		// the labels are defined in the old image (better about 7% for the only sequence I have tested)
 		if (i == 0)
 		{
 			depth_warped[image_level] = depth[image_level];
@@ -1109,27 +1061,27 @@ void VO_SF::mainIteration(bool create_image_pyr)
 		//2. Compute inter coords
 		computeCoordsParallel();
 
-		//4. Compute derivatives
+		//3. Compute derivatives
 		calculateDerivatives();
 
-		//5. Compute weights
+		//4. Compute weights
 		computeWeights();
 
-		//6. Solve odometry
-		solveMotionForegroundAndBackground();
+		//5. Solve odometry
+		solveMotionAllClusters();
     }
 
-	//Get Pose (Odometry) from the background motion estimate
-	getCameraPoseFromBackgroundEstimate();
+	//Update camera pose from the "static" motion estimate
+	updateCameraPoseFromOdometry();
 
-	// Refine static/dynamic segmentation and warp it to use it in the next iteration
-	segmentBackgroundForeground();
-	warpBackgForegSegmentation();
+	//Refine static/dynamic segmentation and warp it to use it in the next iteration
+	segmentStaticDynamic();
+	warpStaticDynamicSegmentation();
 
     //Compute the scene flow from the rigid motions and the labels
 	computeSceneFlowFromRigidMotions();
 
-	//Runtime
+	//Show runtime
 	const float runtime = 1000.f*clock.Tac();
 	printf("\n Runtime = %f (ms) ", runtime);
 	if (create_image_pyr)	printf("including the image pyramid");
@@ -1138,13 +1090,12 @@ void VO_SF::mainIteration(bool create_image_pyr)
 
 void VO_SF::computeSceneFlowFromRigidMotions()
 {
-    //Scene flow is only computed for uncertain or dynamic clusters
 	const unsigned int repr_level = round(log2(width/cols));
 
-    //Compute the rigid transformation associated to the labels
-    Matrix4f mytrans[NUM_LABELS];
+    //Compute the inverse rigid transformation associated to the labels
+    Matrix4f inv_trans[NUM_LABELS];
     for (unsigned int l=0; l<NUM_LABELS; l++)
-        mytrans[l] = T[l].inverse();
+        inv_trans[l] = T_clusters[l].inverse();
 
 	//Refs
 	const MatrixXf &depth_old_ref = depth_old[repr_level];
@@ -1160,13 +1111,13 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 			const float z = depth_old_ref(v,u);
 			const int pixel_label = v + u*rows;
 
-			if ((z != 0.f)&&(bf_segm[labels_ref(v,u)] > 0.333f))
+			if (z != 0.f)
             {			
 				//Interpolate between the transformations
                 trans.fill(0.f);
                 for (unsigned int l=0; l<NUM_LABELS; l++)
                     if (label_funct_ref(l,pixel_label) != 0.f)
-                        trans += label_funct_ref(l,pixel_label)*mytrans[l];
+                        trans += label_funct_ref(l,pixel_label)*inv_trans[l];
 
                 //Transform point to the warped reference frame
                 motionfield[0](v,u) = trans(0,0)*z + trans(0,1)*xx_old_ref(v,u) + trans(0,2)*yy_old_ref(v,u) + trans(0,3) - z;
@@ -1185,7 +1136,6 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 
 void VO_SF::interpolateColorAndDepthAcu(float &c, float &d, const float ind_u, const float ind_v)
 {
-    //const float depth_threshold = 0.03f; // 4 times distances of 10 cm (they are squared below)
 	const float depth_threshold = 0.3f;
 	const float null_threshold = 0.5f;
 
@@ -1199,13 +1149,12 @@ void VO_SF::interpolateColorAndDepthAcu(float &c, float &d, const float ind_u, c
     const float inf_v = floor(ind_v);
     const float sup_v = inf_v + 1.f;
 
-    const Matrix2f cmat = intensity[image_level].block<2,2>(inf_v,inf_u);
-    const Matrix2f dmat = depth[image_level].block<2,2>(inf_v,inf_u);
+	const Array22f cmat = intensity[image_level].block<2,2>(inf_v,inf_u).array();
+    const Array22f dmat = depth[image_level].block<2,2>(inf_v,inf_u).array();
 
 
 	if ((sup_u != inf_u)&&(sup_v != inf_v))
     {
-		//const float depth_dist = square(dmat(0)-dmat(1)) + square(dmat(1)-dmat(2)) + square(dmat(2)-dmat(3));
 		const float depth_dist = abs(dmat(0)-dmat(1)) + abs(dmat(1)-dmat(2)) + abs(dmat(2)-dmat(3));
 
 		if (depth_dist > depth_threshold)
@@ -1218,12 +1167,13 @@ void VO_SF::interpolateColorAndDepthAcu(float &c, float &d, const float ind_u, c
 		else
 		{
 			//Gaussian filter
-			const float weight_dl = (sup_u - ind_u)*(sup_v - ind_v);
-			const float weight_ul = (sup_u - ind_u)*(ind_v - inf_v);
-			const float weight_dr = (ind_u - inf_u)*(sup_v - ind_v);
-			const float weight_ur = (ind_u - inf_u)*(ind_v - inf_v);
-			d = weight_dl*dmat(0,0) + weight_ul*dmat(1,0) + weight_dr*dmat(0,1) + weight_ur*dmat(1,1);
-			c = weight_dl*cmat(0,0) + weight_ul*cmat(1,0) + weight_dr*cmat(0,1) + weight_ur*cmat(1,1);
+			Array22f weights;
+			weights(0) = (sup_u - ind_u)*(sup_v - ind_v);
+			weights(1) = (sup_u - ind_u)*(ind_v - inf_v);
+			weights(2) = (ind_u - inf_u)*(sup_v - ind_v);
+			weights(3) = (ind_u - inf_u)*(ind_v - inf_v);
+			d = (weights*dmat).sum();
+			c = (weights*cmat).sum();
 		}	
     }
     else if ((sup_u == inf_u)&&(sup_v == inf_v))

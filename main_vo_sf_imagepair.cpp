@@ -26,9 +26,11 @@
 #include "joint_vo_sf.h"
 
 
-// ------------------------------------------------------
-//						MAIN
-// ------------------------------------------------------
+// -------------------------------------------------------------------------------
+//								Instructions:
+// Set the flag "save_results" to true if you want to save the estimated scene
+// flow and the static/dynamic segmentation 
+// -------------------------------------------------------------------------------
 
 int main()
 {	
@@ -61,7 +63,8 @@ int main()
 	cf.initializeSceneCamera();
 
 	//Run the algorithm
-	cf.mainIteration(false);
+	for (unsigned int i=0; i<50; i++)
+		cf.run_VO_SF(false);
     cf.createImagesOfSegmentations();
 
 	//Update the 3D scene

@@ -25,13 +25,19 @@
 #include <camera.h>
 
 
-// ------------------------------------------------------
-//						MAIN
-// ------------------------------------------------------
+// -------------------------------------------------------------------------------
+//								Instructions:
+// You need to click on the window of the 3D Scene to be able to interact with it.
+// 'n' - Capture new frame and show it (but don't run the algorithm)
+// 'a' - Run the algorithm with the last two frames captured
+// 's' - Turn on/off continuous estimation
+// 'r' - Reset the camera pose
+// 'e' - Finish/exit
+// -------------------------------------------------------------------------------
 
 int main()
 {	
-    unsigned int res_factor = 2;
+    unsigned int res_factor = 1;
 	VO_SF cf(res_factor);
 	RGBD_Camera camera(res_factor);
 
@@ -66,6 +72,7 @@ int main()
 			
         //Capture a new frame
 		case  'n':
+			cf.use_b_temp_reg = false; //I turn it off here for individual framepair tests
             camera.loadFrame(cf.depth_wf, cf.intensity_wf);
 			cf.createImagePyramid();
 			cf.kMeans3DCoord();
@@ -77,7 +84,7 @@ int main()
 
         //Compute the solution
         case 'a':
-            cf.mainIteration(false);
+            cf.run_VO_SF(false);
             cf.createImagesOfSegmentations();
 
             anything_new = true;
@@ -95,7 +102,7 @@ int main()
 			break;
 			
 		//Close the program
-		case 'p':
+		case 'e':
 			stop = true;
 			break;
 		}
@@ -103,7 +110,7 @@ int main()
         if (continuous_exec)
         {
             camera.loadFrame(cf.depth_wf, cf.intensity_wf);
-            cf.mainIteration(true);
+            cf.run_VO_SF(true);
             cf.createImagesOfSegmentations();
             anything_new = 1;
         }
