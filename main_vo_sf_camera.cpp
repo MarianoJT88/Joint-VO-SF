@@ -41,7 +41,6 @@ int main()
 	VO_SF cf(res_factor);
 	RGBD_Camera camera(res_factor);
 
-
 	//Create the 3D Scene
 	cf.initializeSceneCamera();
 

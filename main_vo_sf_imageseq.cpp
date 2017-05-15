@@ -39,19 +39,12 @@ int main()
 	VO_SF cf(res_factor);
 
 
-	//Load first image
-	unsigned int im_count;
+	//Set first image to load, decimation factor and the sequence dir
+	unsigned int im_count = 1;
 	const unsigned int decimation = 1; //5
-	//string dir = "D:/My RGBD sequences/Giraff loop/"; im_count = 200;
-	//std::string dir = "D:/My RGBD sequences/Giraff sinusoidal/"; im_count = 320; //250
-	//string dir = "D:/My RGBD sequences/Giraff straight/"; im_count = 200;
-	std::string dir = "D:/My RGBD sequences/Me sitting 1/"; im_count = 1; 
-	//std::string dir = "D:/My RGBD sequences/Me sitting 2/"; im_count = 1; 
-	//std::string dir = "D:/My RGBD sequences/Me standing moving cam 1/"; im_count = 1; //- This is bad
-	//std::string dir = "D:/My RGBD sequences/Me standing moving cam 2/"; im_count = 1; 
-	//std::string dir = "D:/My RGBD sequences/Me opening door cam slow 1/"; im_count = 1; 
-	//std::string dir = "D:/My RGBD sequences/Me cleaning whiteboard 1/"; im_count = 1; 
-	//std::string dir = "D:/My RGBD sequences/two people moving 1/"; im_count = 1;
+	std::string dir = ".../data/sequence people moving/"; 
+
+	//Load image and create pyramid
 	cf.loadImageFromSequence(dir, im_count, res_factor);
 	cf.createImagePyramid();
 

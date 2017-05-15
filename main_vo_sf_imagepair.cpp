@@ -38,23 +38,8 @@ int main()
 	const unsigned int res_factor = 2;
 	VO_SF cf(res_factor);
 
-	//Load images
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Mo and Christian/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 2/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 3/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 4/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Person Moving 5/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Giraff 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Giraff 2/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Giraff 3/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Giraff 4/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Me moving 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Me moving 2/";
-	std::string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Two people 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Whiteboard 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Door 1/";
-	//string dir = "C:/Users/jaimez/Dropbox/Cluster-Flow/Experiments/Door 2/";
+	//Set image dir
+	std::string dir = ".../data/opening door/";
 
 	//Load images and create both pyramids
 	cf.loadImagePairFromFiles(dir, res_factor);
@@ -63,8 +48,7 @@ int main()
 	cf.initializeSceneCamera();
 
 	//Run the algorithm
-	for (unsigned int i=0; i<50; i++)
-		cf.run_VO_SF(false);
+	cf.run_VO_SF(false);
     cf.createImagesOfSegmentations();
 
 	//Update the 3D scene
