@@ -44,12 +44,15 @@ http://www.mrpt.org/Collection_of_Kinect_RGBD_datasets_with_ground_truth_CVPR_TU
 You can save the estimated trajectory and evaluate the generated file directly here:
 http://vision.in.tum.de/data/datasets/rgbd-dataset/online_evaluation
 
-
 3)VO-SF-ImagePair: This is a simple application to test the algorithm for a single pair of RGB-D images (mostly useful to see the accuracy of the estimated scene flow). Set the folder where the images are contained in the main file. The image files are expected to have the following names: "depth0.png", "color0.png", "depth1.png" and "color1.png".
 
 4)VO-SF-ImageSeq: To test the algorithm with pre-recorded image sequences. Set the folder where the images are contained in the main file. The image files are expected to have the following names: 
 Depth sequence - "d0.png", "d1.png", "d2.png"...
 Color sequence - "i0.png", "i1.png", "i2.png"...
+
+You can set the first image you want to start with in the main file (initial value in "im_count").
+You can also set a decimation factor with the variable "decimation"
+
 
 
 They all incorporate a 3D visualization that can be used to interact with them. Please read the instructions at the beginning of each main file.
@@ -74,8 +77,9 @@ The executables do not take any command line argument. If you want to run them f
 
 
 
-The provided code is published under the General Public License Version 3 (GPL v3). More information can be found in the "GPU LICENSE.txt" also included in the repository
+The provided code is published under the General Public License Version 3 (GPL v3). More information can be found in the "GPL LICENSE.txt" also included in the repository.
+
 
                                      Warnings!!
 -------------------------------------------------------------------------------------------
-The method "flipHorizontal()" used for the visualizations is only available from MRPT 1.5.0 on. If you use a lower version please comment it before compiling (find it in "visualization.cpp"). When commented it will show mirrored images in the 2D viewports.
+The method "flipHorizontal()" used for the visualizations is only available from MRPT 1.5.0 on. If you use a lower version please comment it before compiling (find it in "visualization.cpp"). When commented, the scene will show mirrored images in the 2D viewports.
