@@ -17,6 +17,9 @@ If you use it in your research, please cite the following paper:
    location = {Singapore}
 }
 
+More info and video in:
+http://mapir.isa.uma.es/work/Joint-VO-SF
+
 
                              Configuration and Generation
 -------------------------------------------------------------------------------------------
