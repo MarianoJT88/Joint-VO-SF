@@ -1,7 +1,3 @@
-To do:
-- CMake to set release on Ubuntu
-
-
 ===========================================================================================
 Fast Odometry and Scene Flow from RGB-D Cameras based on Geometric Clustering
 ===========================================================================================
