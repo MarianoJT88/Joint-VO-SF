@@ -352,21 +352,21 @@ void VO_SF::updateSceneDatasets(const CPose3D &gt, const CPose3D &gt_old)
 	COpenGLViewportPtr vp_image = scene->getViewport("image");
     image.setFromRGBMatrices(im_r_old, im_g_old, im_b_old, true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_image->setImageView(image);
 
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
     image.setFromRGBMatrices(labels_image[0], labels_image[1], labels_image[2], true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_labels->setImageView(image);
 
 	//Background
 	COpenGLViewportPtr vp_backg = scene->getViewport("background");
 	image.setFromRGBMatrices(backg_image[0], backg_image[1], backg_image[2], true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_backg->setImageView(image);
 			
 	window.unlockAccess3DScene();
@@ -450,21 +450,21 @@ void VO_SF::updateSceneImageSeq()
 	COpenGLViewportPtr vp_image = scene->getViewport("image");
     image.setFromRGBMatrices(im_r_old, im_g_old, im_b_old, true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_image->setImageView(image);
 
 	//Labels
 	COpenGLViewportPtr vp_labels = scene->getViewport("labels");
     image.setFromRGBMatrices(labels_image[0], labels_image[1], labels_image[2], true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_labels->setImageView(image);
 
 	//Background
 	COpenGLViewportPtr vp_backg = scene->getViewport("background");
 	image.setFromRGBMatrices(backg_image[0], backg_image[1], backg_image[2], true);
     image.flipVertical();
-	image.flipHorizontal();
+	//image.flipHorizontal();
     vp_backg->setImageView(image);
 			
 	window.unlockAccess3DScene();

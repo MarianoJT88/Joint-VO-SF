@@ -135,7 +135,7 @@ void VO_SF::loadImagePairFromFiles(string files_dir, unsigned int res_factor)
 
     //                              Load the first frame
     //==============================================================================
-    sprintf(aux, "intensity0.png");
+    sprintf(aux, "color0.png");
     string name = files_dir + aux;
 
     cv::Mat intensity = cv::imread(name.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
@@ -160,7 +160,7 @@ void VO_SF::loadImagePairFromFiles(string files_dir, unsigned int res_factor)
 
     //                              Load the second frame
     //==============================================================================
-    sprintf(aux, "intensity1.png");
+    sprintf(aux, "color1.png");
     name = files_dir + aux;
 
     intensity = cv::imread(name.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
