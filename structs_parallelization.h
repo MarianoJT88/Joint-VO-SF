@@ -105,7 +105,7 @@ struct IrlsContext
 			const JacobianT::MapType J(A + i*JacobianElements); 
 			const ResidualT::MapType r(B + i*ResidualElements);
 			residuals.block<2,1>(2*i,0) = J*Var - r;
-			sum_residuals += abs(residuals(2*i)) + abs(residuals(2*i+1));
+			sum_residuals += std::abs(residuals(2*i)) + std::abs(residuals(2*i+1));
 		}
 
 		const float mean_res = std::max(1e-5f, sum_residuals/float(2*num_pixels));
