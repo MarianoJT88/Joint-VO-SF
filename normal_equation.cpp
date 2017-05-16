@@ -68,10 +68,10 @@ void NormalEquation<float, 6, 1>::setZero()
 
 void NormalEquation<float, 6, 1>::get(Traits::MatrixA &A, Traits::VectorB &b)
 {
-  toEigen(data, A);
-for (unsigned int i=0; i<6; i++)
-    b(i) = data_b[i];
-  //b = Traits::VectorB::MapAligned(data_b); //This might crash
+	toEigen(data, A);
+	for (unsigned int i=0; i<6; i++)
+		b(i) = data_b[i];
+	//b = Traits::VectorB::MapAligned(data_b); //This might crash
 }
 
 void NormalEquation<float, 6, 1>::update(const Traits::JacobianMatrix &jacobian, const Traits::ResidualVector &residual, const Traits::InformationMatrix &information)
@@ -115,8 +115,10 @@ void NormalEquation<float, 6, 2>::setZero()
 
 void NormalEquation<float, 6, 2>::get(Traits::MatrixA &A, Traits::VectorB &b)
 {
-  toEigen(data, A);
-  b = Traits::VectorB::MapAligned(data_b); //This might crash ************
+	toEigen(data, A);
+	for (unsigned int i=0; i<6; i++)
+		b(i) = data_b[i];
+	//b = Traits::VectorB::MapAligned(data_b); //This might crash ************
 }
 
 void NormalEquation<float, 6, 2>::add(NormalEquation<float, 6, 2> const &o)

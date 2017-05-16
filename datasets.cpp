@@ -110,12 +110,15 @@ void Datasets::loadFrameAndPoseFromDataset(Eigen::MatrixXf &depth_wf, Eigen::Mat
 	obs3D->load();
 	const Eigen::MatrixXf range = obs3D->rangeImage;
 	const utils::CImage int_image =  obs3D->intensityImage;
-	math::CMatrixFloat intensity; int_image.getAsMatrix(intensity);
-	math::CMatrixFloat r,g,b; int_image.getAsRGBMatrices(r, g, b);
-
 	const unsigned int height = range.getRowCount();
 	const unsigned int width = range.getColCount();
 	const unsigned int cols = width/downsample, rows = height/downsample;
+
+	math::CMatrixFloat intensity, r, g, b;
+	intensity.resize(height, width);
+	r.resize(height, width); g.resize(height, width); b.resize(height, width);
+	int_image.getAsMatrix(intensity);
+	int_image.getAsRGBMatrices(r, g, b);
 
 	for (unsigned int j = 0; j<cols; j++)
 		for (unsigned int i = 0; i<rows; i++)
