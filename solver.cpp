@@ -1104,6 +1104,21 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 	const Matrix<float, NUM_LABELS+1, Dynamic> &label_funct_ref = label_funct[image_level];
 	const MatrixXi &labels_ref = labels[image_level];
 
+	MatrixXf &mx = motionfield[0];
+	MatrixXf &my = motionfield[1];
+	MatrixXf &mz = motionfield[2];
+
+	//Build a mask for clusters whose scene flow should not be computed
+	Matrix<bool, NUM_LABELS, 1> ignore_label; ignore_label.fill(true);
+	for (unsigned int l_here=0; l_here<NUM_LABELS; l_here++)
+		for (unsigned int l=0; l<NUM_LABELS; l++)
+			if (connectivity[l_here][l])
+				if (label_dynamic[l])
+				{
+					ignore_label(l_here) = false;
+					continue;
+				}
+
 	Matrix4f trans; 
     for (unsigned int u = 0; u<cols; u++)
         for (unsigned int v = 0; v<rows; v++)
@@ -1111,25 +1126,34 @@ void VO_SF::computeSceneFlowFromRigidMotions()
 			const float z = depth_old_ref(v,u);
 			const int pixel_label = v + u*rows;
 
-			if (z != 0.f)
+			if ((z != 0.f)&&(!ignore_label(labels_ref(v,u))))
             {			
 				//Interpolate between the transformations
                 trans.fill(0.f);
+				bool pixel_static = true;
+
                 for (unsigned int l=0; l<NUM_LABELS; l++)
-                    if (label_funct_ref(l,pixel_label) != 0.f)
+				{
+					if ((label_funct_ref(l,pixel_label) != 0.f))
+					{
                         trans += label_funct_ref(l,pixel_label)*inv_trans[l];
 
-                //Transform point to the warped reference frame
-                motionfield[0](v,u) = trans(0,0)*z + trans(0,1)*xx_old_ref(v,u) + trans(0,2)*yy_old_ref(v,u) + trans(0,3) - z;
-                motionfield[1](v,u) = trans(1,0)*z + trans(1,1)*xx_old_ref(v,u) + trans(1,2)*yy_old_ref(v,u) + trans(1,3) - xx_old_ref(v,u);
-                motionfield[2](v,u) = trans(2,0)*z + trans(2,1)*xx_old_ref(v,u) + trans(2,2)*yy_old_ref(v,u) + trans(2,3) - yy_old_ref(v,u);
+						if (pixel_static && (label_dynamic[l]))
+							pixel_static = false;
+					}
+				}
+
+
+                
+				if (pixel_static) {mx(v,u) = 0.f; my(v,u) = 0.f; mz(v,u) = 0.f;}
+				else 	//Compute scene flow
+				{
+					mx(v,u) = trans(0,0)*z + trans(0,1)*xx_old_ref(v,u) + trans(0,2)*yy_old_ref(v,u) + trans(0,3) - z;
+					my(v,u) = trans(1,0)*z + trans(1,1)*xx_old_ref(v,u) + trans(1,2)*yy_old_ref(v,u) + trans(1,3) - xx_old_ref(v,u);
+					mz(v,u) = trans(2,0)*z + trans(2,1)*xx_old_ref(v,u) + trans(2,2)*yy_old_ref(v,u) + trans(2,3) - yy_old_ref(v,u);
+				}
             }
-            else
-            {
-				motionfield[0](v,u) = 0.f;
-                motionfield[1](v,u) = 0.f;
-                motionfield[2](v,u) = 0.f;
-            }
+            else {mx(v,u) = 0.f; my(v,u) = 0.f; mz(v,u) = 0.f; }
         }
 }
 

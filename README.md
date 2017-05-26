@@ -69,4 +69,9 @@ The provided code is published under the General Public License Version 3 (GPL v
 
  ## 3. Warnings!!
 
-The method "flipHorizontal()" used for the visualizations is only available from MRPT 1.5.0 on. If you use a lower version please comment it before compiling (find it in "visualization.cpp"). When commented, the scene will show mirrored images in the 2D viewports.
+The method "flipHorizontal()" used for the visualizations is only available from MRPT 1.5.0 on. If you use a lower version please comment it before compiling (find it in "visualization.cpp"). When commented, the scene will show mirrored images in the 2D viewports.   
+
+The 2D viewports embedded in the 3D visualization might fail for some specific configurations. If that is your case, try to go to the corresponding method in "visualization.cpp" and change their initial size to something larger than the image to be plot, for example:
+vp_labels->setViewportPosition(..., ..., 321, 241);  (Images displayed are by default 320 x 240)
+
+ 
