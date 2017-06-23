@@ -12,10 +12,11 @@ http://mapir.isa.uma.es/work/Joint-VO-SF
   
 ## 1. Configuration and Generation
 
-A CMakeLists.txt file is included to detect external dependencies and generate the project automatically. OpenCV, MRPT and OpenNI2 are required, you can get them here:
+A CMakeLists.txt file is included to detect external dependencies and generate the project automatically. OpenCV, MRPT, OpenNI2 and Intel TBB are required, you can get them here:
 - OpenCV: http://opencv.org/
 - MRPT: http://www.mrpt.org/
 - OpenNI2: https://structure.io/openni
+- Intel TBB: https://www.threadingbuildingblocks.org/
  
 The project builds a library embedding the main algorithm as well as other classes to read data from files/datasets or directly from an RGB-D camera. Moreover, it includes 4 different applications to test it. 
 
