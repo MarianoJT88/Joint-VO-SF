@@ -915,8 +915,8 @@ void VO_SF::warpImagesAccurate()
 						const int ind_u = delta_r > delta_l ? uwarp_l/100 : uwarp_r/100;
 						const int ind_v = delta_u > delta_d ? vwarp_d/100 : vwarp_u/100;
 
-						depth_warped_ref(ind_v,ind_u) += depth_w;
-						intensity_warped_ref(ind_v,ind_u) += intensity_w;
+						depth_warped_ref(ind_v,ind_u) += 200.f*depth_w;
+						intensity_warped_ref(ind_v,ind_u) += 200.f*intensity_w;
 						wacu(ind_v,ind_u) += 200;
 					}
 					else
