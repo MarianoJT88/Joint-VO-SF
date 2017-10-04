@@ -35,6 +35,7 @@ You can save the estimated trajectory and evaluate it directly here:
 http://vision.in.tum.de/data/datasets/rgbd-dataset/online_evaluation
 
 **3) VO-SF-ImagePair:** This is a simple application to test the algorithm for a single pair of RGB-D images (mostly useful to see the accuracy of the estimated scene flow). Set the folder where the images are contained in the main file. The image files are expected to have the following names: "depth0.png", "color0.png", "depth1.png" and "color1.png".
+Scene flow is stored in meters (coordinates: x - left/right, y - up/down, z - depth).
 
 **4) VO-SF-ImageSeq:** To test the algorithm with pre-recorded image sequences. Set the folder where the images are contained in the main file. The image files are expected to have the following names:     
 Depth sequence - "d0.png", "d1.png", "d2.png"...   
